@@ -46,7 +46,7 @@ class TempiBeatDetector: NSObject {
     // Bucketing
     private var peakHistoryLength: Double = 4.0 // The time in seconds that we want intervals for before we do a bucket analysis to predict a tempo
     private var peakHistory: [TempiPeakInterval]! // Stores the last n peaks
-    private var bucketCnt: Int = 10 // We'll separate the intervals into this many buckets. i.e. each will have a range of ((60/minTempo) - (60/maxTempo))/bucketCnt.
+    private var bucketCnt: Int = 5 // We'll separate the intervals into this many buckets.
     
     // Audio input
     private var queuedSamples: [Float]!
@@ -228,7 +228,9 @@ class TempiBeatDetector: NSObject {
         
         for i in 0..<self.peakHistory.count {
             let nextInterval = self.peakHistory[i]
-            var bucketIdx: Int = Int(roundf((nextInterval.interval - minInterval)/range * Float(self.bucketCnt)))
+            
+            // Idx = (interval - minInterval) / range * (bucketCnt - 1)
+            var bucketIdx: Int = Int(roundf((nextInterval.interval - minInterval)/range * (Float(self.bucketCnt) - 1.0)))
             bucketIdx = min(bucketIdx, self.bucketCnt - 1)
             buckets[bucketIdx].append(nextInterval.interval)
         }
@@ -311,7 +313,7 @@ class TempiBeatDetector: NSObject {
     
     private func tempo(tempo1: Float, isMultipleOf tempo2: Float, inout multiple: Float) -> Bool
     {
-        let multiples: [Float] = [0.5, 1.5, 1.33333, 2.0]
+        let multiples: [Float] = [0.5, 0,75, 1.5, 1.33333, 2.0]
         for m in multiples {
             if self.tempo(m * tempo2, isNearTempo: tempo1, epsilon: m * 3.0) {
                 multiple = m

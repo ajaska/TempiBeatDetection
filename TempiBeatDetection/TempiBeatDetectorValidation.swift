@@ -11,10 +11,10 @@ import AVFoundation
 extension TempiBeatDetector {
     
     func validate() {
-//        self.validateStudioSet1()
+        self.validateStudioSet1()
         self.validateHomeSet1()
-//        self.validateThreesSet1()
-//        self.validateUtilitySet1()
+        self.validateThreesSet1()
+        self.validateUtilitySet1()
 
     }
     

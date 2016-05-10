@@ -16,6 +16,7 @@ extension TempiBeatDetector {
         self.validateThreesSet1()
         self.validateUtilitySet1()
 
+//        oneOffTest()
     }
     
     private func projectURL() -> NSURL {
@@ -198,12 +199,12 @@ extension TempiBeatDetector {
     private func oneOffTest() {
         self.testSetSetupForSetName("oneOff")
 
-        self.testAudio("Studio/Learn To Fly.mp3",
-                       label: "learn-to-fly",
-                       actualTempo: 136,
+        self.testAudio("Studio/Skinny Sweaty Man.mp3",
+                       label: "skinny-sweaty-man",
+                       actualTempo: 141,
                        startTime: 0, endTime: 15,
                        minTempo: 80, maxTempo: 160,
-                       variance: 2)
+                       variance: 3)
         
         self.testSetFinish()
     }

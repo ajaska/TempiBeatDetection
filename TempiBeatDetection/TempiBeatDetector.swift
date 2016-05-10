@@ -126,7 +126,7 @@ class TempiBeatDetector: NSObject {
             self.handlePeak(timeStamp: timeStamp, magnitude: magnitude)
             }, sampleRate: self.sampleRate / Float(self.hopSize))
         
-        self.peakDetector.coalesceInterval = 0.1
+        self.peakDetector.coalesceInterval = 0.2
         self.lastPeakTimeStamp = nil
         self.lastMeasuredTempo = 0
         self.confidence = 0

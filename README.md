@@ -28,9 +28,9 @@ Using the ```TempiBeatDetector``` class in your project is simple and I've inclu
 
 A robust validation system is critical to evaluating changes made to the beat detection algorithm. The project utilizes Xcode's unit testing infrastructure to perform validation, so just type Command-U to start it. The project includes sample audio files in the 'Test Media' directory which are typically 15-20s in length and categorized into Home, Studio, Threes, and Utility. Here are the current validation results:
 
-- Home set: 54.4%
-- Studio set: 84.4%
-- Threes set: 37%
+- Home set: 64.6%
+- Studio set: 79.1%
+- Threes set: 43%
 - Utility set: 100%
 
 While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Peak detection plots' directory. The plotData file contains time stamps and magnitudes while the plotMarkers file contains time stamps and a marker for each detected peak.

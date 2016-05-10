@@ -257,7 +257,7 @@ class TempiBeatDetector: NSObject {
         if self.lastMeasuredTempo == 0 || self.tempo(bpm, isNearTempo: self.lastMeasuredTempo, epsilon: 2.0) {
             // The tempo remained constant. Bump our confidence up a notch.
             self.confidence = min(10, self.confidence + 1)
-        } else if self.tempo(bpm, isMultipleOf: self.lastMeasuredTempo, multiple: &multiple) {
+        } else if self.confidence > 2 && self.tempo(bpm, isMultipleOf: self.lastMeasuredTempo, multiple: &multiple) {
             // The tempo changed but it's still a multiple of the last. Adapt it by that multiple but don't change confidence.
             originalBPM = bpm
             bpm = bpm / multiple

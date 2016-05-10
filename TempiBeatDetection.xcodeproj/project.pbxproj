@@ -173,7 +173,6 @@
 					};
 					EFF64A861CD90C4900EBA555 = {
 						CreatedOnToolsVersion = 7.3;
-						TestTargetID = EFE97D631CCFC8840082BAEC;
 					};
 				};
 			};
@@ -386,24 +385,20 @@
 		EFF64A8F1CD90C4900EBA555 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				INFOPLIST_FILE = TempiBeatDetectionTests/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = net.scalo.TempiBeatDetectionTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TempiBeatDetection.app/TempiBeatDetection";
 			};
 			name = Debug;
 		};
 		EFF64A901CD90C4900EBA555 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				INFOPLIST_FILE = TempiBeatDetectionTests/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = net.scalo.TempiBeatDetectionTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TempiBeatDetection.app/TempiBeatDetection";
 			};
 			name = Release;
 		};
@@ -435,6 +430,7 @@
 				EFF64A901CD90C4900EBA555 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

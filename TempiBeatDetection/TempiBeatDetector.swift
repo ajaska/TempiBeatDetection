@@ -313,7 +313,7 @@ class TempiBeatDetector: NSObject {
     
     private func tempo(tempo1: Float, isMultipleOf tempo2: Float, inout multiple: Float) -> Bool
     {
-        let multiples: [Float] = [0.5, 0,75, 1.5, 1.33333, 2.0]
+        let multiples: [Float] = [0.5, 0.75, 1.5, 1.33333, 2.0]
         for m in multiples {
             if self.tempo(m * tempo2, isNearTempo: tempo1, epsilon: m * 3.0) {
                 multiple = m

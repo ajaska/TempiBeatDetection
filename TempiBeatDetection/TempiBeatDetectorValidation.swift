@@ -106,7 +106,7 @@ extension TempiBeatDetector {
         
         self.testActualTempo = actualTempo
         
-        var queuedSamples: [Float] = [Float]()
+        var queuedFileSamples: [Float] = [Float]()
         
         repeat {
             var status: OSStatus = 0
@@ -145,7 +145,7 @@ extension TempiBeatDetector {
                 let ptr = UnsafePointer<Float>(bufferList.mBuffers.mData)
                 let newPtr = ptr + i
                 let sample = unsafeBitCast(newPtr.memory, Float.self)
-                queuedSamples.append(sample)
+                queuedFileSamples.append(sample)
             }
 
             // We have a big buffer of audio (whatever CoreAudio decided to give us).
@@ -153,23 +153,23 @@ extension TempiBeatDetector {
             // shifting by hopSize (e.g. 132 samples) after each iteration. If there's not enough data in the buffer (bufferSampleCnt < chunkSize),
             // then add the data to the queue and get the next buffer.
 
-            while queuedSamples.count >= self.chunkSize {
+            while queuedFileSamples.count >= self.chunkSize {
                 let timeStamp: Double = Double(samplePtr) / Double(self.sampleRate)
                 
                 if self.endTime > 0.01 {
                     if timeStamp < self.startTime || timeStamp > self.endTime {
-                        queuedSamples.removeFirst(self.hopSize)
+                        queuedFileSamples.removeFirst(self.hopSize)
                         samplePtr += self.hopSize
                         continue
                     }
                 }
                 
-                let subArray: [Float] = Array(queuedSamples[0..<self.chunkSize])
+                let subArray: [Float] = Array(queuedFileSamples[0..<self.chunkSize])
                 
                 self.analyzeAudioChunk(timeStamp: timeStamp, samples: subArray)
                 
                 samplePtr += self.hopSize
-                queuedSamples.removeFirst(self.hopSize)
+                queuedFileSamples.removeFirst(self.hopSize)
             }
             
         } while true

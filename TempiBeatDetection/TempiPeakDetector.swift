@@ -23,7 +23,7 @@ class TempiPeakDetector: NSObject {
     /// The rate at which the peak detector samples magnitudes, not the sample rate at which audio is captured
     var sampleRate: Float
     
-    /// The detector will coalesce peaks around this many samples, selecting the largest.
+    /// The detector will coalesce peaks around this time interval, selecting the largest.
     var coalesceInterval: Double = 0.0
     
     private var sampleInterval: Double

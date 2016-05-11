@@ -28,8 +28,8 @@ Using the ```TempiBeatDetector``` class in your project is simple and I've inclu
 
 A robust validation system is critical to evaluating changes made to the beat detection algorithm. The project utilizes Xcode's unit testing infrastructure to perform validation, so just type Command-U to start it. The project includes sample audio files in the 'Test Media' directory which are typically 15-20s in length and categorized into Home, Studio, Threes, and Utility. Here are the current validation results:
 
-- Home set: 68.1%
-- Studio set: 83.8%
+- Home set: 69.3%
+- Studio set: 84.2%
 - Threes set: 43.2%
 - Utility set: 100%
 

@@ -265,7 +265,7 @@ class TempiBeatDetector: NSObject {
         } else {
             // Drop our confidence down a notch
             self.confidence = max(0, self.confidence - 1)
-            if self.confidence > 7 {
+            if self.confidence > 5 {
                 // The tempo changed but our confidence level in the old tempo was high.
                 // Don't report this result.
                 print(String(format: "%0.2f: IGNORING bpm = %0.2f", timeStamp, bpm));

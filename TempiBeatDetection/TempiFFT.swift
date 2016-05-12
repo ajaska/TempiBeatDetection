@@ -325,7 +325,7 @@ import Accelerate
         while curFreq <= highFreq {
             var mag = magnitudeAtFrequency(curFreq)
             if (useDB) {
-                mag = max(0, TempiFFT.toDB(mag));
+                mag = max(0, TempiFFT.toDB(mag))
             }
             total += mag
             curFreq += self.bandwidth

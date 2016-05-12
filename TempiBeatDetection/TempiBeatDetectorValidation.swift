@@ -7,6 +7,7 @@
 
 import Foundation
 import AVFoundation
+import Accelerate
 
 extension TempiBeatDetector {
     
@@ -16,7 +17,7 @@ extension TempiBeatDetector {
         self.validateThreesSet1()
         self.validateUtilitySet1()
 
-//        oneOffTest()
+//        self.oneOffTest()
     }
     
     private func projectURL() -> NSURL {
@@ -49,7 +50,7 @@ extension TempiBeatDetector {
     
     private func validationFinish() {
         let result = 100.0 * Float(self.testCorrect) / Float(self.testTotal)
-        print(String(format:"[%@] accuracy: %.01f%%\n", self.currentTestName, result));
+        print(String(format:"[%@] accuracy: %.01f%%\n", self.currentTestName, result))
         self.testSetResults.append(result)
     }
     
@@ -65,9 +66,9 @@ extension TempiBeatDetector {
         
         let avAsset: AVURLAsset = AVURLAsset(URL: songURL)
         
-        print("Start testing: \(path)")
+        print("Start testing: \(path); actual bpm: \(actualTempo)")
         
-        self.currentTestName = label;
+        self.currentTestName = label
         
         self.startTime = startTime
         self.endTime = endTime
@@ -186,25 +187,24 @@ extension TempiBeatDetector {
     }
     
     private func testSetSetupForSetName(setName: String) {
-        print("Starting validation set \(setName)");
+        print("Starting validation set \(setName)")
         self.currentTestSetName = setName
         self.testSetResults = [Float]()
     }
     
     private func testSetFinish() {
         let mean: Float = tempi_mean(self.testSetResults)
-        print(String(format:"Validation set [%@] accuracy: %.01f%%\n", self.currentTestSetName, mean));
+        print(String(format:"Validation set [%@] accuracy: %.01f%%\n", self.currentTestSetName, mean))
     }
     
     private func oneOffTest() {
         self.testSetSetupForSetName("oneOff")
 
-        self.testAudio("Studio/Skinny Sweaty Man.mp3",
-                       label: "skinny-sweaty-man",
-                       actualTempo: 141,
-                       startTime: 0, endTime: 15,
+        self.testAudio("Home/Hard Top-2.mp3",
+                       label: "hard-top2",
+                       actualTempo: 150,
                        minTempo: 80, maxTempo: 160,
-                       variance: 3)
+                       variance: 2)
         
         self.testSetFinish()
     }
@@ -305,13 +305,13 @@ extension TempiBeatDetector {
         
         self.testAudio("Home/Hard Top-1.mp3",
                        label: "hard-top1",
-                       actualTempo: 133,
+                       actualTempo: 141,
                        minTempo: 80, maxTempo: 160,
                        variance: 2)
         
         self.testAudio("Home/Hard Top-2.mp3",
                        label: "hard-top2",
-                       actualTempo: 146,
+                       actualTempo: 150,
                        minTempo: 80, maxTempo: 160,
                        variance: 2)
         
@@ -380,6 +380,12 @@ extension TempiBeatDetector {
     
     private func validateUtilitySet1 () {
         self.testSetSetupForSetName("utilitySet1")
+
+        self.testAudio("Utility/half-clave-115.mp3",
+                       label: "half-clave-115",
+                       actualTempo: 115,
+                       minTempo: 40, maxTempo: 240,
+                       variance: 1)
 
         self.testAudio("Utility/metronome-88.mp3",
                        label: "metronome-88",

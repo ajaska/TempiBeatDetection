@@ -43,10 +43,17 @@ class TempiBeatDetector: NSObject {
     private var peakDetector: TempiPeakDetector!
     private var lastMagnitudes: [Float]!
     
-    // Bucketing
+    // For peak analysis
     private var peakHistoryLength: Double = 4.0 // The time in seconds that we want intervals for before we do a bucket analysis to predict a tempo
     private var peakHistory: [TempiPeakInterval]! // Stores the last n peaks
     private var bucketCnt: Int = 5 // We'll separate the intervals into this many buckets.
+    
+    // For autocorrelation analysis
+    private var magHistoryLength: Double = 8.0 // Save the last N seconds of computed magnitudes
+    private var magMinimumHistoryLengthForAnalysis: Double = 2.0
+    private var magHistory: [Float]!
+    private var magTimeStamps: [Double]!
+    private let correlationValueThreshold: Float = 0.1 // Any correlations less than this are not reported
     
     // Audio input
     private var queuedSamples: [Float]!
@@ -74,6 +81,9 @@ class TempiBeatDetector: NSObject {
     var plotFFTDataFile, plotMarkersFile, plotAudioSamplesFile: UnsafeMutablePointer<FILE>!
     var allow2XResults: Bool = true
     var allowedTempoVariance: Float = 2.0
+    
+    // This is just for testing. Remove soon.
+    let forcePeakAnalysis = false
     
 #if os(iOS)
     func startFromMic() {
@@ -121,6 +131,8 @@ class TempiBeatDetector: NSObject {
     func setupCommon() {
         self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
         self.peakHistory = [TempiPeakInterval]()
+        self.magHistory = [Float]()
+        self.magTimeStamps = [Double]()
         
         self.peakDetector = TempiPeakDetector(peakDetectionCallback: { (timeStamp, magnitude) in
             self.handlePeak(timeStamp: timeStamp, magnitude: magnitude)
@@ -142,7 +154,7 @@ class TempiBeatDetector: NSObject {
     func analyzeAudioChunk(timeStamp timeStamp: Double, samples: [Float]) {
         let (magnitude, success) = self.calculateMagnitude(timeStamp: timeStamp, samples: samples)
         if (!success) {
-            return;
+            return
         }
         
         if self.savePlotData {
@@ -150,6 +162,15 @@ class TempiBeatDetector: NSObject {
         }
 
         self.peakDetector.addMagnitude(timeStamp: timeStamp, magnitude: magnitude)
+        
+        self.magHistory.append(magnitude)
+        self.magTimeStamps.append(timeStamp)
+        
+        // Remove stale mags.
+        while timeStamp - self.magTimeStamps.first! > self.magHistoryLength {
+            self.magTimeStamps.removeFirst()
+            self.magHistory.removeFirst()
+        }
     }
     
     private func handlePeak(timeStamp timeStamp: Double, magnitude: Float) {
@@ -168,9 +189,21 @@ class TempiBeatDetector: NSObject {
         let peakInterval = TempiPeakInterval(timeStamp: timeStamp, magnitude: magnitude, interval: Float(mappedInterval))
         self.peakHistory.append(peakInterval)
         
-        if self.peakHistory.count >= 2 &&
-            (self.peakHistory.last?.timeStamp)! - (self.peakHistory.first?.timeStamp)! >= self.peakHistoryLength {
-            self.performBucketAnalysisAtTimeStamp(timeStamp)
+        // If we have enough data, perform autocorrelation. This might generate a bpm reading.
+        var correlationValue: Float = 0
+        let shouldPeformCorrelationAnalysis = self.magHistory.count > 2 &&
+            (self.magTimeStamps.last! - self.magTimeStamps.first! >= self.magMinimumHistoryLengthForAnalysis)
+        if shouldPeformCorrelationAnalysis && !self.forcePeakAnalysis {
+            correlationValue = self.performCorrelationAnalysis(timeStamp: timeStamp)
+        }
+
+        // If the correlation value was low, then fall back to peak analysis.
+        let shouldPerformPeakAnalysis = (correlationValue < self.correlationValueThreshold &&
+            self.peakHistory.count >= 2 &&
+            (self.peakHistory.last?.timeStamp)! - (self.peakHistory.first?.timeStamp)! >= self.peakHistoryLength)
+        if self.forcePeakAnalysis || shouldPerformPeakAnalysis {
+            print("** falling back to peak analysis")
+            self.performPeakAnalysis(timeStamp: timeStamp)
         }
         
         self.lastPeakTimeStamp = timeStamp
@@ -217,14 +250,57 @@ class TempiBeatDetector: NSObject {
         return (tempi_median(diffs), true)
     }
     
-    private func performBucketAnalysisAtTimeStamp(timeStamp: Double) {
+    private func performCorrelationAnalysis(timeStamp timeStamp: Double) -> Float {
+        var corr = tempi_autocorr(self.magHistory, normalize: true)
+        corr = Array(corr[0..<self.magHistory.count])
+        
+        var maxes = tempi_max_n(corr, n: 100)
+        
+        // remove this testing
+        if maxes.count == 0 {
+            return 0
+        }
+        
+        // Throw away indices < 20. Those are all 'echoes' of the original signal.
+        maxes = maxes.filter({
+            // NB: tempi_max_n returns a tuple. The .0 element is the index into the correlation sequence.
+            return $0.0 >= 20
+        })
+        
+        if maxes.count == 0 {
+            return 0
+        }
+        
+        let corrValue: Float = maxes.first!.1
+        if corrValue < self.correlationValueThreshold {
+            return corrValue
+        }
+        
+        // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
+        let period = maxes.first!.0
+        let measureInterval = Float(period) * Float(self.hopSize) / self.sampleRate
+        
+        // Now we have to guess whether the song is in 4/4 or something else. Hmm.
+        let beatInterval = measureInterval / 4.0
+        
+        let mappedInterval = self.mapInterval(Double(beatInterval))
+
+        // Divide into 60 to get the bpm.
+        let bpm = 60.0 / Float(mappedInterval)
+        
+        // Don't allow confidence utilization when doing correlation analysis since the 'confidence' 
+        // is already built into the correaltion value and we returned early if it weren't high enough.
+        self.handleEstimatedBPM(timeStamp: timeStamp, bpm: bpm, useConfidence: false)
+        
+        return corrValue
+    }
+    
+    private func performPeakAnalysis(timeStamp timeStamp: Double) {
         var buckets = [[Float]].init(count: self.bucketCnt, repeatedValue: [Float]())
         
         let minInterval: Float = 60.0/self.maxTempo
         let maxInterval: Float = 60.0/self.minTempo
         let range = maxInterval - minInterval
-        var originalBPM: Float = 0.0
-        var adjusted = false
         
         for i in 0..<self.peakHistory.count {
             let nextInterval = self.peakHistory[i]
@@ -235,7 +311,7 @@ class TempiBeatDetector: NSObject {
             buckets[bucketIdx].append(nextInterval.interval)
         }
         
-        // Eliminate stale intervals.
+        // Remove stale intervals.
         self.peakHistory = self.peakHistory.filter({
             return timeStamp - $0.timeStamp <= self.peakHistoryLength
         })
@@ -250,51 +326,61 @@ class TempiBeatDetector: NSObject {
         let medianPredominantInterval = tempi_median(predominantIntervals!)
         
         // Divide into 60 to get the bpm.
-        var bpm = 60.0 / medianPredominantInterval
+        let bpm = 60.0 / medianPredominantInterval
         
+        self.handleEstimatedBPM(timeStamp: timeStamp, bpm: bpm)
+    }
+    
+    private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool? = true) {
+        var originalBPM = bpm
+        var newBPM = bpm
         var multiple: Float = 0.0
+        var adjustedConfidence = self.confidence
+        
+        if !useConfidence! {
+            adjustedConfidence = 0
+        }
         
         if self.lastMeasuredTempo == 0 || self.tempo(bpm, isNearTempo: self.lastMeasuredTempo, epsilon: 2.0) {
             // The tempo remained constant. Bump our confidence up a notch.
             self.confidence = min(10, self.confidence + 1)
-        } else if self.confidence > 2 && self.tempo(bpm, isMultipleOf: self.lastMeasuredTempo, multiple: &multiple) {
+        } else if adjustedConfidence > 2 && self.tempo(bpm, isMultipleOf: self.lastMeasuredTempo, multiple: &multiple) {
             // The tempo changed but it's still a multiple of the last. Adapt it by that multiple but don't change confidence.
             originalBPM = bpm
-            bpm = bpm / multiple
-            adjusted = true
+            newBPM = bpm / multiple
         } else {
             // Drop our confidence down a notch
             self.confidence = max(0, self.confidence - 1)
             if self.confidence > 5 {
                 // The tempo changed but our confidence level in the old tempo was high.
                 // Don't report this result.
-                print(String(format: "%0.2f: IGNORING bpm = %0.2f", timeStamp, bpm));
-                self.lastMeasuredTempo = bpm
+                print(String(format: "%0.2f: IGNORING bpm = %0.2f", timeStamp, newBPM))
+                self.lastMeasuredTempo = newBPM
                 return
             }
         }
         
         if self.beatDetectionHandler != nil {
-            self.beatDetectionHandler(timeStamp: timeStamp, bpm: bpm)
+            self.beatDetectionHandler(timeStamp: timeStamp, bpm: newBPM)
         }
         
-        if adjusted {
-            print(String(format:"%0.2f: bpm = %0.2f (adj from %0.2f)", timeStamp, bpm, originalBPM));
+        if originalBPM != newBPM {
+            print(String(format:"%0.2f: bpm = %0.2f (adj from %0.2f)", timeStamp, newBPM, originalBPM))
         } else {
-            print(String(format:"%0.2f: bpm = %0.2f", timeStamp, bpm));
+            print(String(format:"%0.2f: bpm = %0.2f", timeStamp, newBPM))
         }
         
         self.testTotal += 1
-        if self.tempo(bpm, isNearTempo: self.testActualTempo, epsilon: self.allowedTempoVariance) {
+        if self.tempo(newBPM, isNearTempo: self.testActualTempo, epsilon: self.allowedTempoVariance) {
             self.testCorrect += 1
         } else {
-            if self.tempo(bpm, isNearTempo: 2.0 * self.testActualTempo, epsilon: self.allowedTempoVariance) ||
-                self.tempo(bpm, isNearTempo: 0.5 * self.testActualTempo, epsilon: self.allowedTempoVariance) {
+            if self.tempo(newBPM, isNearTempo: 2.0 * self.testActualTempo, epsilon: self.allowedTempoVariance) ||
+                self.tempo(newBPM, isNearTempo: 0.5 * self.testActualTempo, epsilon: self.allowedTempoVariance) {
                 self.testCorrect += 1
             }
         }
         
-        self.lastMeasuredTempo = bpm
+        self.lastMeasuredTempo = newBPM
     }
     
     private func mapInterval(interval: Double) -> Double {
@@ -325,7 +411,7 @@ class TempiBeatDetector: NSObject {
     }
 
     private func tempo(tempo1: Float, isNearTempo tempo2: Float, epsilon: Float) -> Bool {
-        return tempo2 - epsilon < tempo1 && tempo2 + epsilon > tempo1;
+        return tempo2 - epsilon < tempo1 && tempo2 + epsilon > tempo1
     }
     
 }

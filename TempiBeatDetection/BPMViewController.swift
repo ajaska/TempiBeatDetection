@@ -96,7 +96,7 @@ class BPMViewController: UIViewController {
     
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
-        print("*** Low memory ***");
+        print("*** Low memory ***")
     }
 }
 

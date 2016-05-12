@@ -107,7 +107,7 @@ class TempiPeakDetector: NSObject {
     
     private func evaluatePeakQueue(timeStamp: Double) {
         if (self.coalesceInterval == 0.0) {
-            return;
+            return
         }
         
         // If it's been longer than coalesceInterval since last sending a peak, coalesce them and send.

@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		EF0587141CD1827500745BF6 /* TempiBeatDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0587131CD1827500745BF6 /* TempiBeatDetector.swift */; };
 		EF0587171CD6F2BA00745BF6 /* TempiBeatDetectorValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0587161CD6F2BA00745BF6 /* TempiBeatDetectorValidation.swift */; };
+		EFD00F501CE4FEB100C0F314 /* TempiDSP.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD00F4F1CE4FEB100C0F314 /* TempiDSP.swift */; };
+		EFD00F511CE4FF6A00C0F314 /* TempiDSP.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFD00F4F1CE4FEB100C0F314 /* TempiDSP.swift */; };
 		EFE97D681CCFC8850082BAEC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFE97D671CCFC8850082BAEC /* AppDelegate.swift */; };
 		EFE97D6A1CCFC8850082BAEC /* BPMViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFE97D691CCFC8850082BAEC /* BPMViewController.swift */; };
 		EFE97D6D1CCFC8850082BAEC /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = EFE97D6B1CCFC8850082BAEC /* Main.storyboard */; };
@@ -40,6 +42,7 @@
 /* Begin PBXFileReference section */
 		EF0587131CD1827500745BF6 /* TempiBeatDetector.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TempiBeatDetector.swift; sourceTree = "<group>"; };
 		EF0587161CD6F2BA00745BF6 /* TempiBeatDetectorValidation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TempiBeatDetectorValidation.swift; sourceTree = "<group>"; };
+		EFD00F4F1CE4FEB100C0F314 /* TempiDSP.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TempiDSP.swift; sourceTree = "<group>"; };
 		EFE97D641CCFC8850082BAEC /* TempiBeatDetection.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TempiBeatDetection.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EFE97D671CCFC8850082BAEC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		EFE97D691CCFC8850082BAEC /* BPMViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BPMViewController.swift; sourceTree = "<group>"; };
@@ -103,6 +106,7 @@
 				EFE97D7B1CCFC9050082BAEC /* TempiFFT.swift */,
 				EFE97D7D1CCFC90B0082BAEC /* TempiAudioInput.swift */,
 				EFE97D7F1CCFC9100082BAEC /* TempiUtilities.swift */,
+				EFD00F4F1CE4FEB100C0F314 /* TempiDSP.swift */,
 				EFE97D6B1CCFC8850082BAEC /* Main.storyboard */,
 				EFE97D6E1CCFC8850082BAEC /* Assets.xcassets */,
 				EFE97D701CCFC8850082BAEC /* LaunchScreen.storyboard */,
@@ -221,6 +225,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EFE97D7C1CCFC9050082BAEC /* TempiFFT.swift in Sources */,
+				EFD00F501CE4FEB100C0F314 /* TempiDSP.swift in Sources */,
 				EFE97D7A1CCFC8FB0082BAEC /* TempiPeakDetector.swift in Sources */,
 				EFE97D6A1CCFC8850082BAEC /* BPMViewController.swift in Sources */,
 				EF0587141CD1827500745BF6 /* TempiBeatDetector.swift in Sources */,
@@ -242,6 +247,7 @@
 				EFF64A951CD90CAF00EBA555 /* TempiUtilities.swift in Sources */,
 				EFF64A961CD90CCA00EBA555 /* TempiAudioInput.swift in Sources */,
 				EFF64A921CD90C9F00EBA555 /* TempiBeatDetectorValidation.swift in Sources */,
+				EFD00F511CE4FF6A00C0F314 /* TempiDSP.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

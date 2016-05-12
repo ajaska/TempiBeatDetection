@@ -22,27 +22,6 @@ func tempi_is_power_of_2 (n: Int) -> Bool {
     return remainderf(Float(n), powf(2.0, lg2)) == 0
 }
 
-func tempi_max(a: [Float]) -> Float {
-    var max: Float = 0.0
-    
-    vDSP_maxv(a, 1, &max, UInt(a.count))
-    return max
-}
-
-func tempi_smooth(a: [Float], w: Int) -> [Float] {
-    var newA: [Float] = [Float]()
-    
-    for i in 0..<a.count {
-        let realW = min(w, a.count - i)
-        var avg: Float = 0.0
-        let subArray: [Float] = Array(a[i..<i+realW])
-        vDSP_meanv(subArray, 1, &avg, UInt(realW))
-        newA.append(avg)
-    }
-    
-    return newA
-}
-
 func tempi_median(a: [Float]) -> Float {
     // I tried to make this an Array extension and failed. See below.
     let sortedArray : [Float] = a.sort( { $0 < $1 } )
@@ -64,12 +43,16 @@ func tempi_median(a: [Float]) -> Float {
 }
 
 func tempi_mean(a: [Float]) -> Float {
-    // Again, would be better as an Array extension.
-    var total : Float = 0
-    for (_, f) in a.enumerate() {
-        total += f
+    // Again, would be better as an Array extension.    
+    var mean: Float = 0
+    vDSP_meanv(a, 1, &mean, UInt(a.count))
+    return mean
+}
+
+func tempi_dump_array(a: [Float]) {
+    for f in a {
+        print(String(format:"%.03f", f))
     }
-    return total/Float(a.count)
 }
 
 //extension Array where Element : IntegerArithmeticType {

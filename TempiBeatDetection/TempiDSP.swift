@@ -26,10 +26,12 @@ func tempi_autocorr(a: [Float], normalize: Bool) -> [Float] {
     // rounded up to a multiple of four elements and added to the result length. The extra elements give the vDSP_conv routine
     // leeway to perform vector-load instructions, which load multiple elements even if they are not all used. If the caller did not
     // guarantee that memory beyond the values used in the signal array were accessible, a memory access violation might result.”
-    let signalLen = ((filterLen + 3) & 0xFFFFFFFC) + resultLen
+
+    // Why all the UInts? Because I get an overflow error with Int and the 0x literal (but only when profiling?!?!)
+    let signalLen: UInt = ((UInt(filterLen) + 3) & 0xFFFFFFFC) + UInt(resultLen)
     
     let padding1 = [Float].init(count: a.count - 1, repeatedValue: 0.0)
-    let padding2 = [Float].init(count: (signalLen - padding1.count - a.count), repeatedValue: 0.0)
+    let padding2 = [Float].init(count: (Int(signalLen) - padding1.count - a.count), repeatedValue: 0.0)
     let signal = padding1 + a + padding2
     
     var result = [Float].init(count: resultLen, repeatedValue: 0.0)

@@ -214,7 +214,7 @@ extension TempiBeatDetector {
         
         self.testAudio("Studio/Skinny Sweaty Man.mp3",
                        label: "skinny-sweaty-man",
-                       actualTempo: 141,
+                       actualTempo: 144,
                        startTime: 0, endTime: 15,
                        minTempo: 80, maxTempo: 160,
                        variance: 3)
@@ -230,7 +230,7 @@ extension TempiBeatDetector {
                        label: "louie-louie",
                        actualTempo: 120,
                        startTime: 0, endTime: 15,
-                       minTempo: 60, maxTempo: 120,
+                       minTempo: 80, maxTempo: 160,
                        variance: 3)
 
         self.testAudio("Studio/Learn To Fly.mp3",

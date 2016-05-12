@@ -49,11 +49,11 @@ class TempiBeatDetector: NSObject {
     private var bucketCnt: Int = 5 // We'll separate the intervals into this many buckets.
     
     // For autocorrelation analysis
-    private var magHistoryLength: Double = 8.0 // Save the last N seconds of computed magnitudes
+    private var magHistoryLength: Double = 12.0 // Save the last N seconds of computed magnitudes
     private var magMinimumHistoryLengthForAnalysis: Double = 2.0
     private var magHistory: [Float]!
     private var magTimeStamps: [Double]!
-    private let correlationValueThreshold: Float = 0.1 // Any correlations less than this are not reported
+    private let correlationValueThreshold: Float = 0.27 // Any correlations less than this are not reported. Higher numbers produce more accuracy but sparser reporting.
     
     // Audio input
     private var queuedSamples: [Float]!
@@ -254,12 +254,8 @@ class TempiBeatDetector: NSObject {
         var corr = tempi_autocorr(self.magHistory, normalize: true)
         corr = Array(corr[0..<self.magHistory.count])
         
-        var maxes = tempi_max_n(corr, n: 100)
-        
-        // remove this testing
-        if maxes.count == 0 {
-            return 0
-        }
+        // Get the top 40 correlations
+        var maxes = tempi_max_n(corr, n: 40)
         
         // Throw away indices < 20. Those are all 'echoes' of the original signal.
         maxes = maxes.filter({
@@ -273,6 +269,7 @@ class TempiBeatDetector: NSObject {
         
         let corrValue: Float = maxes.first!.1
         if corrValue < self.correlationValueThreshold {
+            print(String(format: "%.02f: ** low correlation %.02f", timeStamp, corrValue))
             return corrValue
         }
         
@@ -331,13 +328,13 @@ class TempiBeatDetector: NSObject {
         self.handleEstimatedBPM(timeStamp: timeStamp, bpm: bpm)
     }
     
-    private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool? = true) {
+    private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool = true) {
         var originalBPM = bpm
         var newBPM = bpm
         var multiple: Float = 0.0
         var adjustedConfidence = self.confidence
         
-        if !useConfidence! {
+        if !useConfidence {
             adjustedConfidence = 0
         }
         
@@ -351,7 +348,10 @@ class TempiBeatDetector: NSObject {
         } else {
             // Drop our confidence down a notch
             self.confidence = max(0, self.confidence - 1)
-            if self.confidence > 5 {
+            if useConfidence {
+                adjustedConfidence = self.confidence
+            }
+            if adjustedConfidence > 5 {
                 // The tempo changed but our confidence level in the old tempo was high.
                 // Don't report this result.
                 print(String(format: "%0.2f: IGNORING bpm = %0.2f", timeStamp, newBPM))

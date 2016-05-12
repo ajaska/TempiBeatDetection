@@ -82,9 +82,6 @@ class TempiBeatDetector: NSObject {
     var allow2XResults: Bool = true
     var allowedTempoVariance: Float = 2.0
     
-    // This is just for testing. Remove soon.
-    let forcePeakAnalysis = false
-    
 #if os(iOS)
     func startFromMic() {
         if self.audioInput == nil {
@@ -190,20 +187,10 @@ class TempiBeatDetector: NSObject {
         self.peakHistory.append(peakInterval)
         
         // If we have enough data, perform autocorrelation. This might generate a bpm reading.
-        var correlationValue: Float = 0
         let shouldPeformCorrelationAnalysis = self.magHistory.count > 2 &&
             (self.magTimeStamps.last! - self.magTimeStamps.first! >= self.magMinimumHistoryLengthForAnalysis)
-        if shouldPeformCorrelationAnalysis && !self.forcePeakAnalysis {
-            correlationValue = self.performCorrelationAnalysis(timeStamp: timeStamp)
-        }
-
-        // If the correlation value was low, then fall back to peak analysis.
-        let shouldPerformPeakAnalysis = (correlationValue < self.correlationValueThreshold &&
-            self.peakHistory.count >= 2 &&
-            (self.peakHistory.last?.timeStamp)! - (self.peakHistory.first?.timeStamp)! >= self.peakHistoryLength)
-        if self.forcePeakAnalysis || shouldPerformPeakAnalysis {
-            print("** falling back to peak analysis")
-            self.performPeakAnalysis(timeStamp: timeStamp)
+        if shouldPeformCorrelationAnalysis {
+            self.performCorrelationAnalysis(timeStamp: timeStamp)
         }
         
         self.lastPeakTimeStamp = timeStamp
@@ -293,6 +280,8 @@ class TempiBeatDetector: NSObject {
     }
     
     private func performPeakAnalysis(timeStamp timeStamp: Double) {
+        // At this point autocorrelation analysis seems superior to the below alg. in every way, so it's currently unused.
+        // Perhaps it will still be useful as a fallback.
         var buckets = [[Float]].init(count: self.bucketCnt, repeatedValue: [Float]())
         
         let minInterval: Float = 60.0/self.maxTempo

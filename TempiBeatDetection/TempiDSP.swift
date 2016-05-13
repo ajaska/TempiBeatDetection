@@ -17,8 +17,8 @@ func tempi_autocorr(a: [Float], normalize: Bool) -> [Float] {
     // Since the signal will always correlate perfectly with itself, the value at index 0 will always be the highest in the sequence.
     // Unfortunately vDSP_conv requires the arrays to be padded with 0s on either side, presumably to make SIMD operations possible.
     // (This assumes strides are 1. For -1, vDSP_conv performs a convolution.)
-    let filterLen = a.count
-    let resultLen = filterLen * 2 - 1
+    let filterLen: UInt = UInt(a.count)
+    let resultLen: UInt = filterLen * 2 - 1
     
     // From https://developer.apple.com/library/mac/samplecode/vDSPExamples/Listings/DemonstrateConvolution_c.html :
     // “The signal length is padded a bit. This length is not actually passed to the vDSP_conv routine; it is the number of elements
@@ -26,20 +26,18 @@ func tempi_autocorr(a: [Float], normalize: Bool) -> [Float] {
     // rounded up to a multiple of four elements and added to the result length. The extra elements give the vDSP_conv routine
     // leeway to perform vector-load instructions, which load multiple elements even if they are not all used. If the caller did not
     // guarantee that memory beyond the values used in the signal array were accessible, a memory access violation might result.”
-
-    // Why all the UInts? Because I get an overflow error with Int and the 0x literal (but only when profiling?!?!)
-    let signalLen: UInt = ((UInt(filterLen) + 3) & 0xFFFFFFFC) + UInt(resultLen)
+    let signalLen: UInt = ((filterLen + 3) & 0xFFFFFFFC) + resultLen
     
     let padding1 = [Float].init(count: a.count - 1, repeatedValue: 0.0)
     let padding2 = [Float].init(count: (Int(signalLen) - padding1.count - a.count), repeatedValue: 0.0)
     let signal = padding1 + a + padding2
     
-    var result = [Float].init(count: resultLen, repeatedValue: 0.0)
+    var result = [Float].init(count: Int(resultLen), repeatedValue: 0.0)
     
-    vDSP_conv(signal, 1, a, 1, &result, 1, UInt(resultLen), UInt(filterLen))
+    vDSP_conv(signal, 1, a, 1, &result, 1, resultLen, filterLen)
     
     // Remove the first n-1 values which are just mirrored from the end. This way [0] always shows the 1.0 autocorrelation.
-    result.removeFirst(filterLen - 1)
+    result.removeFirst(Int(filterLen) - 1)
     
     if normalize {
         tempi_normalize(&result, a)

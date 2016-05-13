@@ -342,7 +342,7 @@ extension TempiBeatDetector {
 
         self.testAudio("Threes/Norwegian Wood.mp3",
                        label: "norwegian-wood",
-                       actualTempo: 180,
+                       actualTempo: 182,
                        startTime: 0, endTime: 0,
                        minTempo: 100, maxTempo: 200,
                        variance: 3)
@@ -356,10 +356,10 @@ extension TempiBeatDetector {
         
         self.testAudio("Threes/Oh How We Danced.mp3",
                        label: "oh-how-we-danced",
-                       actualTempo: 180,
+                       actualTempo: 179,
                        startTime: 0, endTime: 20,
                        minTempo: 100, maxTempo: 200,
-                       variance: 2)
+                       variance: 3)
         
         self.testAudio("Threes/Texas Flood.mp3",
                        label: "texas-flood",
@@ -370,7 +370,7 @@ extension TempiBeatDetector {
         
         self.testAudio("Threes/Brahms Lullaby.mp3",
                        label: "brahms-lullaby",
-                       actualTempo: 70,
+                       actualTempo: 68,
                        startTime: 0, endTime: 15,
                        minTempo: 60, maxTempo: 120,
                        variance: 2)

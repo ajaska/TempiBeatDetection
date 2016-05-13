@@ -191,10 +191,11 @@ class TempiBeatDetector: NSObject {
         var diffs: Array = [Float]()
         for i in 0..<self.frequencyBands {
             var mag = fft.magnitudeAtBand(i)
+
+            // log requires > 0
+            mag = max(mag, 0.00000001)
             
-            if mag > 0.0 {
-                mag = log10f(mag)
-            }
+            mag = log10f(mag)
             
             // The 1000.0 here isn't important; just makes the data easier to see in plots, etc.
             let flux: Float = 1000.0 * max(0.0, mag - self.lastMagnitudes[i])

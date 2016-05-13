@@ -275,7 +275,7 @@ extension TempiBeatDetector {
 
         self.testAudio("Home/AG-Blackbird-2.mp3",
                        label: "ag-blackbird2",
-                       actualTempo: 95,
+                       actualTempo: 96,
                        minTempo: 60, maxTempo: 120,
                        variance: 3)
         
@@ -287,7 +287,7 @@ extension TempiBeatDetector {
         
         self.testAudio("Home/AG-Sunset Road-116-2.mp3",
                        label: "ag-sunsetroad2",
-                       actualTempo: 116,
+                       actualTempo: 115,
                        minTempo: 80, maxTempo: 160,
                        variance: 2)
         
@@ -305,7 +305,7 @@ extension TempiBeatDetector {
         
         self.testAudio("Home/Hard Top-1.mp3",
                        label: "hard-top1",
-                       actualTempo: 141,
+                       actualTempo: 140,
                        minTempo: 80, maxTempo: 160,
                        variance: 2)
         

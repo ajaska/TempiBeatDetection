@@ -13,12 +13,6 @@ typealias TempiBeatDetectionCallback = (
     bpm: Float
     ) -> Void
 
-struct TempiPeakInterval {
-    var timeStamp: Double
-    var magnitude: Float
-    var interval: Float
-}
-
 class TempiBeatDetector: NSObject {
     
     // All 3 of sampleRate, chunkSize, and hopSize must be changed in conjunction. (Halve one, halve all of them.)
@@ -35,7 +29,7 @@ class TempiBeatDetector: NSObject {
     var maxTempo: Float = 220
 
     /// The number of bands to split the audio signal into. 6, 12, or 30 supported.
-    var frequencyBands: Int = 6
+    var frequencyBands: Int = 12
 
     var beatDetectionHandler: TempiBeatDetectionCallback!
     
@@ -43,25 +37,17 @@ class TempiBeatDetector: NSObject {
     private var peakDetector: TempiPeakDetector!
     private var lastMagnitudes: [Float]!
     
-    // For peak analysis
-    private var peakHistoryLength: Double = 4.0 // The time in seconds that we want intervals for before we do a bucket analysis to predict a tempo
-    private var peakHistory: [TempiPeakInterval]! // Stores the last n peaks
-    private var bucketCnt: Int = 5 // We'll separate the intervals into this many buckets.
-    
     // For autocorrelation analysis
-    private var magHistoryLength: Double = 12.0 // Save the last N seconds of computed magnitudes
-    private var magMinimumHistoryLengthForAnalysis: Double = 2.0
-    private var magHistory: [Float]!
-    private var magTimeStamps: [Double]!
-    private let correlationValueThreshold: Float = 0.27 // Any correlations less than this are not reported. Higher numbers produce more accuracy but sparser reporting.
-    
+    private var fluxHistory: [[Float]]! // Holds calculated flux values for each band
+    private var fluxHistoryLength: Double = 12.0 // Save the last N seconds of flux values
+    private var fluxMinimumHistoryLengthForAnalysis: Double = 2.0
+    private var fluxTimeStamps: [Double]!
+    private let correlationValueThreshold: Float = 0.15 // Any correlations less than this are not reported. Higher numbers produce more accuracy but sparser reporting.
+
     // Audio input
     private var queuedSamples: [Float]!
     private var queuedSamplesPtr: Int = 0
     private var savedTimeStamp: Double!
-    
-    // Peak detection
-    private var lastPeakTimeStamp: Double!
     
     // Confidence ratings
     private var confidence: Int = 0
@@ -103,16 +89,14 @@ class TempiBeatDetector: NSObject {
     
     func setupCommon() {
         self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
-        self.peakHistory = [TempiPeakInterval]()
-        self.magHistory = [Float]()
-        self.magTimeStamps = [Double]()
+        self.fluxTimeStamps = [Double]()
+        self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
         
         self.peakDetector = TempiPeakDetector(peakDetectionCallback: { (timeStamp, magnitude) in
             self.handlePeak(timeStamp: timeStamp, magnitude: magnitude)
             }, sampleRate: self.sampleRate / Float(self.hopSize))
         
         self.peakDetector.coalesceInterval = 0.2
-        self.lastPeakTimeStamp = nil
         self.lastMeasuredTempo = 0
         self.confidence = 0
         self.firstPass = true
@@ -125,24 +109,25 @@ class TempiBeatDetector: NSObject {
 #endif
     
     func analyzeAudioChunk(timeStamp timeStamp: Double, samples: [Float]) {
-        let (magnitude, success) = self.calculateMagnitude(timeStamp: timeStamp, samples: samples)
+        let (flux, success) = self.calculateFlux(timeStamp: timeStamp, samples: samples)
         if (!success) {
             return
         }
         
         if self.savePlotData {
-            fputs("\(timeStamp) \(magnitude)\n", self.plotFFTDataFile)
+            fputs("\(timeStamp) \(flux)\n", self.plotFFTDataFile)
         }
 
-        self.peakDetector.addMagnitude(timeStamp: timeStamp, magnitude: magnitude)
+        self.peakDetector.addMagnitude(timeStamp: timeStamp, magnitude: flux)
         
-        self.magHistory.append(magnitude)
-        self.magTimeStamps.append(timeStamp)
+        self.fluxTimeStamps.append(timeStamp)
         
-        // Remove stale mags.
-        while timeStamp - self.magTimeStamps.first! > self.magHistoryLength {
-            self.magTimeStamps.removeFirst()
-            self.magHistory.removeFirst()
+        // Remove stale flux values.
+        while timeStamp - self.fluxTimeStamps.first! > self.fluxHistoryLength {
+            self.fluxTimeStamps.removeFirst()
+            for i in 0..<self.frequencyBands {
+                self.fluxHistory[i].removeFirst()
+            }
         }
     }
     
@@ -175,32 +160,18 @@ class TempiBeatDetector: NSObject {
     }
 
     private func handlePeak(timeStamp timeStamp: Double, magnitude: Float) {
-        if (self.lastPeakTimeStamp == nil) {
-            self.lastPeakTimeStamp = timeStamp
-            return
-        }
-        
-        let interval: Double = timeStamp - self.lastPeakTimeStamp
         
         if self.savePlotData {
             fputs("\(timeStamp) 1\n", self.plotMarkersFile)
         }
         
-        let mappedInterval = self.mapInterval(interval)
-        let peakInterval = TempiPeakInterval(timeStamp: timeStamp, magnitude: magnitude, interval: Float(mappedInterval))
-        self.peakHistory.append(peakInterval)
-        
         // If we have enough data, perform autocorrelation. This might generate a bpm reading.
-        let shouldPeformCorrelationAnalysis = self.magHistory.count > 2 &&
-            (self.magTimeStamps.last! - self.magTimeStamps.first! >= self.magMinimumHistoryLengthForAnalysis)
-        if shouldPeformCorrelationAnalysis {
+        if self.fluxHistory[0].count > 2 && (self.fluxTimeStamps.last! - self.fluxTimeStamps.first! >= self.fluxMinimumHistoryLengthForAnalysis) {
             self.performCorrelationAnalysis(timeStamp: timeStamp)
         }
-        
-        self.lastPeakTimeStamp = timeStamp
     }
     
-    private func calculateMagnitude(timeStamp timeStamp: Double, samples: [Float]) -> (magnitude: Float, success: Bool) {
+    private func calculateFlux(timeStamp timeStamp: Double, samples: [Float]) -> (flux: Float, success: Bool) {
         let fft: TempiFFT = TempiFFT(withSize: self.chunkSize, sampleRate: self.sampleRate)
         fft.windowType = TempiFFTWindowType.hanning
         fft.fftForward(samples)
@@ -226,10 +197,11 @@ class TempiBeatDetector: NSObject {
             }
             
             // The 1000.0 here isn't important; just makes the data easier to see in plots, etc.
-            let diff: Float = 1000.0 * max(0.0, mag - self.lastMagnitudes[i])
+            let flux: Float = 1000.0 * max(0.0, mag - self.lastMagnitudes[i])
             
             self.lastMagnitudes[i] = mag
-            diffs.append(diff)
+            self.fluxHistory[i].append(flux)
+            diffs.append(flux)
         }
         
         if self.firstPass {
@@ -244,85 +216,63 @@ class TempiBeatDetector: NSObject {
     // MARK: - Autocorrelation analysis
     
     private func performCorrelationAnalysis(timeStamp timeStamp: Double) -> Float {
-        var corr = tempi_autocorr(self.magHistory, normalize: true)
-        corr = Array(corr[0..<self.magHistory.count])
         
-        // Get the top 40 correlations
-        var maxes = tempi_max_n(corr, n: 40)
+        var bpms: [Float] = [Float]()
+        var maxCorrValue: Float = 0.0
         
-        // Throw away indices < 20. Those are all 'echoes' of the original signal.
-        maxes = maxes.filter({
-            // NB: tempi_max_n returns a tuple. The .0 element is the index into the correlation sequence.
-            return $0.0 >= 20
-        })
-        
-        if maxes.count == 0 {
-            return 0
-        }
-        
-        let corrValue: Float = maxes.first!.1
-        if corrValue < self.correlationValueThreshold {
-            print(String(format: "%.02f: ** low correlation %.02f", timeStamp, corrValue))
-            return corrValue
-        }
-        
-        // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
-        let period = maxes.first!.0
-        let measureInterval = Float(period) * Float(self.hopSize) / self.sampleRate
-        
-        // Now we have to guess whether the song is in 4/4 or something else. Hmm.
-        let beatInterval = measureInterval / 4.0
-        
-        let mappedInterval = self.mapInterval(Double(beatInterval))
-
-        // Divide into 60 to get the bpm.
-        let bpm = 60.0 / Float(mappedInterval)
-        
-        // Don't allow confidence utilization when doing correlation analysis since the 'confidence' 
-        // is already built into the correaltion value and we returned early if it weren't high enough.
-        self.handleEstimatedBPM(timeStamp: timeStamp, bpm: bpm, useConfidence: false)
-        
-        return corrValue
-    }
-    
-    // MARK: - Peak analysis
-
-    private func performPeakAnalysis(timeStamp timeStamp: Double) {
-        // At this point autocorrelation analysis seems superior to the below alg. in every way, so it's currently unused.
-        // Perhaps it will still be useful as a fallback.
-        var buckets = [[Float]].init(count: self.bucketCnt, repeatedValue: [Float]())
-        
-        let minInterval: Float = 60.0/self.maxTempo
-        let maxInterval: Float = 60.0/self.minTempo
-        let range = maxInterval - minInterval
-        
-        for i in 0..<self.peakHistory.count {
-            let nextInterval = self.peakHistory[i]
+        for i in 0..<self.frequencyBands {
+            var corr = tempi_autocorr(self.fluxHistory[i], normalize: true)
+            corr = Array(corr[0..<self.fluxHistory[i].count])
             
-            // Idx = (interval - minInterval) / range * (bucketCnt - 1)
-            var bucketIdx: Int = Int(roundf((nextInterval.interval - minInterval)/range * (Float(self.bucketCnt) - 1.0)))
-            bucketIdx = min(bucketIdx, self.bucketCnt - 1)
-            buckets[bucketIdx].append(nextInterval.interval)
+            // Get the top 40 correlations
+            var maxes = tempi_max_n(corr, n: 40)
+            
+            // Throw away indices < 20. Those are all 'echoes' of the original signal.
+            maxes = maxes.filter({
+                // NB: tempi_max_n returns a tuple. The .0 element is the index into the correlation sequence.
+                return $0.0 >= 20
+            })
+            
+            if maxes.count == 0 {
+                return 0
+            }
+            
+            let corrValue: Float = maxes.first!.1
+            if corrValue > maxCorrValue {
+                maxCorrValue = corrValue
+            }
+            
+            if corrValue < self.correlationValueThreshold {
+                continue
+            }
+            
+            // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
+            let period = maxes.first!.0
+            let measureInterval = Float(period) * Float(self.hopSize) / self.sampleRate
+            
+            // Now we have to guess whether the song is in 4/4 or something else. Hmm.
+            let beatInterval = measureInterval / 4.0
+            
+            let mappedInterval = self.mapInterval(Double(beatInterval))
+            
+            // Divide into 60 to get the bpm.
+            let bpm = 60.0 / Float(mappedInterval)
+            
+            bpms.append(bpm)
         }
         
-        // Remove stale intervals.
-        self.peakHistory = self.peakHistory.filter({
-            return timeStamp - $0.timeStamp <= self.peakHistoryLength
-        })
+        if maxCorrValue < self.correlationValueThreshold {
+            print(String(format: "%.02f: ** low correlation %.02f", timeStamp, maxCorrValue))
+            return maxCorrValue
+        }
+
+        let estimatedBPM = tempi_median(bpms)
         
-        // Sort to find which bucket has the most intervals.
-        buckets = buckets.sort({ $0.count < $1.count })
+        // Don't allow confidence utilization when doing correlation analysis since the 'confidence'
+        // is already built into the correaltion value and we returned early if it weren't high enough.
+        self.handleEstimatedBPM(timeStamp: timeStamp, bpm: estimatedBPM, useConfidence: false)
         
-        // The predominant bucket is the last.
-        let predominantIntervals = buckets.last
-        
-        // Use the median interval for prediction.
-        let medianPredominantInterval = tempi_median(predominantIntervals!)
-        
-        // Divide into 60 to get the bpm.
-        let bpm = 60.0 / medianPredominantInterval
-        
-        self.handleEstimatedBPM(timeStamp: timeStamp, bpm: bpm)
+        return maxCorrValue
     }
     
     // MARK: -

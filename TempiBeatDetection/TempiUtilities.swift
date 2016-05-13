@@ -25,21 +25,13 @@ func tempi_is_power_of_2 (n: Int) -> Bool {
 func tempi_median(a: [Float]) -> Float {
     // I tried to make this an Array extension and failed. See below.
     let sortedArray : [Float] = a.sort( { $0 < $1 } )
-    var median : Float
     
     if sortedArray.count == 1 {
         return sortedArray[0]
     }
     
-    if sortedArray.count % 2 == 0 {
-        let f1 : Float = sortedArray[sortedArray.count / 2 - 1]
-        let f2 : Float = sortedArray[sortedArray.count / 2]
-        median = (f1 + f2) / 2.0
-    } else {
-        median = sortedArray[sortedArray.count / 2]
-    }
-    
-    return median
+    // Technically the median should return the mean of the 2 'center' values, but that's bad for our purposes. Just use the last.
+    return sortedArray[sortedArray.count / 2]
 }
 
 func tempi_mean(a: [Float]) -> Float {

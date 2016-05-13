@@ -6,8 +6,6 @@ Beat detection is a difficult problem and few if any open beat detection librari
 
 Tempi in its current state is "pretty good". It does very well with rock/pop/electronic music where there's a prominent back beat to measure the tempo by. However it needs help with:
 
-- Syncopated music
-- Acoustic music
 - Music in 3/4 or 6/8 (and other non-4/4 meters for that matter)
 - Music with prominent vocals
 
@@ -27,10 +25,10 @@ Using the ```TempiBeatDetector``` class in your project is simple and I've inclu
 
 A robust validation system is critical to evaluating changes made to the beat detection algorithm. The project utilizes Xcode's unit testing infrastructure to perform validation, so just type Command-U to start it. The project includes sample audio files in the 'Test Media' directory which are typically 15-20s in length and categorized into Home, Studio, Threes, and Utility. Here are the current validation results:
 
-- Studio set: 94.2%
-- Home set: 81.1%
-- Threes set: 43.7%
-- Utility set: 79.9%
+- Studio set: 94.3%
+- Home set: 94.7%
+- Threes set: 24.2%
+- Utility set: 83.8%
 
 While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Peak detection plots' directory. The plotData file contains time stamps and magnitudes while the plotMarkers file contains time stamps and a marker for each detected peak.
 

@@ -12,8 +12,8 @@ import Accelerate
 extension TempiBeatDetector {
     
     func validate() {
-        self.validateStudioSet1()
-        self.validateHomeSet1()
+//        self.validateStudioSet1()
+//        self.validateHomeSet1()
         self.validateThreesSet1()
         self.validateUtilitySet1()
 
@@ -194,17 +194,18 @@ extension TempiBeatDetector {
     
     private func testSetFinish() {
         let mean: Float = tempi_mean(self.testSetResults)
-        print(String(format:"Validation set [%@] accuracy: %.01f%%\n", self.currentTestSetName, mean))
+        print(String(format:"--- Validation set [%@] accuracy: %.01f%%\n", self.currentTestSetName, mean))
     }
     
     private func oneOffTest() {
         self.testSetSetupForSetName("oneOff")
 
-        self.testAudio("Home/Hard Top-2.mp3",
-                       label: "hard-top2",
-                       actualTempo: 150,
+        self.testAudio("Studio/Satisfaction.mp3",
+                       label: "satisfaction",
+                       actualTempo: 137,
+                       startTime: 0, endTime: 20,
                        minTempo: 80, maxTempo: 160,
-                       variance: 2)
+                       variance: 2.5)
         
         self.testSetFinish()
     }

@@ -82,6 +82,8 @@ class TempiBeatDetector: NSObject {
     var allow2XResults: Bool = true
     var allowedTempoVariance: Float = 2.0
     
+    // MARK: - Public funcs
+
 #if os(iOS)
     func startFromMic() {
         if self.audioInput == nil {
@@ -97,32 +99,6 @@ class TempiBeatDetector: NSObject {
     
     func stop() {
         self.audioInput.stopRecording()
-    }
-    
-    private func handleMicAudio(timeStamp timeStamp: Double, numberOfFrames:Int, samples:[Float]) {
-        
-        if (self.queuedSamples.count + numberOfFrames < self.chunkSize) {
-            // We're not going to have enough samples for analysis. Queue the samples and save off the timeStamp.
-            self.queuedSamples.appendContentsOf(samples)
-            if self.savedTimeStamp == nil {
-                self.savedTimeStamp = timeStamp
-            }
-            return
-        }
-        
-        self.queuedSamples.appendContentsOf(samples)
-
-        var baseTimeStamp: Double = self.savedTimeStamp != nil ? self.savedTimeStamp : timeStamp
-        
-        while self.queuedSamples.count >= self.chunkSize {
-            let subArray: [Float] = Array(self.queuedSamples[0..<self.chunkSize])
-            self.analyzeAudioChunk(timeStamp: baseTimeStamp, samples: subArray)
-            self.queuedSamplesPtr += self.hopSize
-            self.queuedSamples.removeFirst(self.hopSize)
-            baseTimeStamp += Double(self.hopSize)/Double(self.sampleRate)
-        }
-        
-        self.savedTimeStamp = nil
     }
     
     func setupCommon() {
@@ -170,6 +146,34 @@ class TempiBeatDetector: NSObject {
         }
     }
     
+    // MARK: - Private stuff
+    
+    private func handleMicAudio(timeStamp timeStamp: Double, numberOfFrames:Int, samples:[Float]) {
+        
+        if (self.queuedSamples.count + numberOfFrames < self.chunkSize) {
+            // We're not going to have enough samples for analysis. Queue the samples and save off the timeStamp.
+            self.queuedSamples.appendContentsOf(samples)
+            if self.savedTimeStamp == nil {
+                self.savedTimeStamp = timeStamp
+            }
+            return
+        }
+        
+        self.queuedSamples.appendContentsOf(samples)
+        
+        var baseTimeStamp: Double = self.savedTimeStamp != nil ? self.savedTimeStamp : timeStamp
+        
+        while self.queuedSamples.count >= self.chunkSize {
+            let subArray: [Float] = Array(self.queuedSamples[0..<self.chunkSize])
+            self.analyzeAudioChunk(timeStamp: baseTimeStamp, samples: subArray)
+            self.queuedSamplesPtr += self.hopSize
+            self.queuedSamples.removeFirst(self.hopSize)
+            baseTimeStamp += Double(self.hopSize)/Double(self.sampleRate)
+        }
+        
+        self.savedTimeStamp = nil
+    }
+
     private func handlePeak(timeStamp timeStamp: Double, magnitude: Float) {
         if (self.lastPeakTimeStamp == nil) {
             self.lastPeakTimeStamp = timeStamp
@@ -237,6 +241,8 @@ class TempiBeatDetector: NSObject {
         return (tempi_median(diffs), true)
     }
     
+    // MARK: - Autocorrelation analysis
+    
     private func performCorrelationAnalysis(timeStamp timeStamp: Double) -> Float {
         var corr = tempi_autocorr(self.magHistory, normalize: true)
         corr = Array(corr[0..<self.magHistory.count])
@@ -279,6 +285,8 @@ class TempiBeatDetector: NSObject {
         return corrValue
     }
     
+    // MARK: - Peak analysis
+
     private func performPeakAnalysis(timeStamp timeStamp: Double) {
         // At this point autocorrelation analysis seems superior to the below alg. in every way, so it's currently unused.
         // Perhaps it will still be useful as a fallback.
@@ -316,6 +324,8 @@ class TempiBeatDetector: NSObject {
         
         self.handleEstimatedBPM(timeStamp: timeStamp, bpm: bpm)
     }
+    
+    // MARK: -
     
     private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool = true) {
         var originalBPM = bpm

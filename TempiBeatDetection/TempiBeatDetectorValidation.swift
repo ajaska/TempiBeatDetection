@@ -384,58 +384,58 @@ extension TempiBeatDetector {
         self.testAudio("Utility/half-clave-115.mp3",
                        label: "half-clave-115",
                        actualTempo: 115,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testAudio("Utility/half-clave-220.mp3",
                        label: "half-clave-220",
                        actualTempo: 220,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 120, maxTempo: 240,
                        variance: 1)
 
         self.testAudio("Utility/half-clave-80.mp3",
                        label: "half-clave-80",
                        actualTempo: 80,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testAudio("Utility/full-clave-105.mp3",
                        label: "full-clave-105",
                        actualTempo: 105,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testAudio("Utility/full-clave-135.mp3",
                        label: "full-clave-135",
                        actualTempo: 135,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 80, maxTempo: 160,
                        variance: 1)
 
         self.testAudio("Utility/full-clave-65.mp3",
                        label: "full-clave-65",
                        actualTempo: 65,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testAudio("Utility/metronome-88.mp3",
                        label: "metronome-88",
                        actualTempo: 88,
                        startTime: 0, endTime: 10,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testAudio("Utility/metronome-126.mp3",
                        label: "metronome-126",
                        actualTempo: 126,
                        startTime: 0, endTime: 15,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 80, maxTempo: 160,
                        variance: 1)
 
         self.testAudio("Utility/1sTones.mp3",
                        label: "1s-tones",
                        actualTempo: 60,
                        startTime: 0, endTime: 10,
-                       minTempo: 40, maxTempo: 240,
+                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testSetFinish()

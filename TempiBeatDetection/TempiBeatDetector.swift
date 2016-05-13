@@ -35,7 +35,7 @@ class TempiBeatDetector: NSObject {
     var maxTempo: Float = 220
 
     /// The number of bands to split the audio signal into. 6, 12, or 30 supported.
-    var frequencyBands: Int = 12
+    var frequencyBands: Int = 6
 
     var beatDetectionHandler: TempiBeatDetectionCallback!
     

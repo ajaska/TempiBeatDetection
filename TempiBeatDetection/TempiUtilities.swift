@@ -17,6 +17,12 @@ func tempi_dispatch_delay(delay:Double, closure:()->()) {
         dispatch_get_main_queue(), closure)
 }
 
+func tempi_synchronized(lock: AnyObject, closure: () -> ()) {
+    objc_sync_enter(lock)
+    closure()
+    objc_sync_exit(lock)
+}
+
 func tempi_is_power_of_2 (n: Int) -> Bool {
     let lg2 = logbf(Float(n))
     return remainderf(Float(n), powf(2.0, lg2)) == 0

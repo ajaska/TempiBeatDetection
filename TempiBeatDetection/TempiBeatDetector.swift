@@ -174,7 +174,7 @@ class TempiBeatDetector: NSObject {
         
         // If we have enough data, perform autocorrelation. This might generate a bpm reading.
         if self.fluxHistory[0].count > 2 && (self.fluxTimeStamps.last! - self.fluxTimeStamps.first! >= self.fluxMinimumHistoryLengthForAnalysis) {
-            self.performCorrelationAnalysis(timeStamp: timeStamp)
+            self.performMultiBandCorrelationAnalysis(timeStamp: timeStamp)
         }
     }
     
@@ -221,51 +221,29 @@ class TempiBeatDetector: NSObject {
     
     // MARK: - Autocorrelation analysis
     
-    private func performCorrelationAnalysis(timeStamp timeStamp: Double) -> Float {
+    private func performMultiBandCorrelationAnalysis(timeStamp timeStamp: Double) -> Float {
         
         var bpms: [Float] = [Float]()
         var maxCorrValue: Float = 0.0
         
+        // Perform the analysis of each band on a separate thread using GCD
+        let group = dispatch_group_create()
+        
         for i in 0..<self.frequencyBands {
-            var corr = tempi_autocorr(self.fluxHistory[i], normalize: true)
-            corr = Array(corr[0..<self.fluxHistory[i].count])
-            
-            // Get the top 40 correlations
-            var maxes = tempi_max_n(corr, n: 40)
-            
-            // Throw away indices < 20. Those are all 'echoes' of the original signal.
-            maxes = maxes.filter({
-                // NB: tempi_max_n returns a tuple. The .0 element is the index into the correlation sequence.
-                return $0.0 >= 20
+            dispatch_group_async(group, dispatch_get_global_queue(0, 0), {
+                let (corr, bpm) = self.performSingleCorrelationAnalysis(self.fluxHistory[i])
+                if let corr = corr, bpm = bpm {
+                    tempi_synchronized(self) {
+                        if corr > maxCorrValue {
+                            maxCorrValue = corr
+                        }
+                        bpms.append(bpm)
+                    }
+                }
             })
-            
-            if maxes.count == 0 {
-                return 0
-            }
-            
-            let corrValue: Float = maxes.first!.1
-            if corrValue > maxCorrValue {
-                maxCorrValue = corrValue
-            }
-            
-            if corrValue < self.correlationValueThreshold {
-                continue
-            }
-            
-            // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
-            let period = maxes.first!.0
-            let measureInterval = Float(period) * Float(self.hopSize) / self.sampleRate
-            
-            // Now we have to guess whether the song is in 4/4 or something else. Hmm.
-            let beatInterval = measureInterval / 4.0
-            
-            let mappedInterval = self.mapInterval(Double(beatInterval))
-            
-            // Divide into 60 to get the bpm.
-            let bpm = 60.0 / Float(mappedInterval)
-            
-            bpms.append(bpm)
         }
+        
+        dispatch_group_wait(group, DISPATCH_TIME_FOREVER)
         
         if maxCorrValue < self.correlationValueThreshold {
             print(String(format: "%.02f: ** low correlation %.02f", timeStamp, maxCorrValue))
@@ -279,6 +257,42 @@ class TempiBeatDetector: NSObject {
         self.handleEstimatedBPM(timeStamp: timeStamp, bpm: estimatedBPM, useConfidence: false)
         
         return maxCorrValue
+    }
+    
+    private func performSingleCorrelationAnalysis(fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?) {
+        var corr = tempi_autocorr(fluxValues, normalize: true)
+        corr = Array(corr[0..<fluxValues.count])
+        
+        // Get the top 40 correlations
+        var maxes = tempi_max_n(corr, n: 40)
+        
+        // Throw away indices < 20. Those are all 'echoes' of the original signal.
+        maxes = maxes.filter({
+            // NB: tempi_max_n returns a tuple. The .0 element is the index into the correlation sequence.
+            return $0.0 >= 20
+        })
+        
+        if maxes.count == 0 {
+            return (nil, nil)
+        }
+        
+        let corrValue: Float = maxes.first!.1
+        
+        if corrValue < self.correlationValueThreshold {
+            return (nil, nil)
+        }
+        
+        // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
+        let period = maxes.first!.0
+        let measureInterval = Float(period) * Float(self.hopSize) / self.sampleRate
+        
+        // Now we have to guess whether the song is in 4/4 or something else. Hmm.
+        let beatInterval = measureInterval / 4.0
+        
+        let mappedInterval = self.mapInterval(Double(beatInterval))
+        
+        // Divide into 60 to get the bpm.
+        return (corrValue, 60.0 / Float(mappedInterval))
     }
     
     // MARK: -

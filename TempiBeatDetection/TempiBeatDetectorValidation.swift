@@ -14,7 +14,7 @@ extension TempiBeatDetector {
     func validate() {
 //        self.validateStudioSet1()
 //        self.validateHomeSet1()
-        self.validateThreesSet1()
+//        self.validateThreesSet1()
         self.validateUtilitySet1()
 
 //        self.oneOffTest()
@@ -200,12 +200,23 @@ extension TempiBeatDetector {
     private func oneOffTest() {
         self.testSetSetupForSetName("oneOff")
 
-        self.testAudio("Studio/Satisfaction.mp3",
-                       label: "satisfaction",
-                       actualTempo: 137,
-                       startTime: 0, endTime: 20,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2.5)
+        self.testAudio("Utility/full-clave-65.mp3",
+                       label: "full-clave-65",
+                       actualTempo: 65,
+                       minTempo: 60, maxTempo: 120,
+                       variance: 1)
+        
+        self.testSetFinish()
+    }
+    
+    func validatePerformance() {
+        self.testSetSetupForSetName("validatePerformance")
+        
+        self.testAudio("Utility/half-clave-220.mp3",
+                       label: "half-clave-220",
+                       actualTempo: 220,
+                       minTempo: 120, maxTempo: 240,
+                       variance: 1)
         
         self.testSetFinish()
     }

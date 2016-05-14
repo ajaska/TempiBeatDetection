@@ -30,6 +30,8 @@ class TempiBeatDetector: NSObject {
 
     /// The number of bands to split the audio signal into. 6, 12, or 30 supported.
     var frequencyBands: Int = 12
+    
+    var fft: TempiFFT!
 
     var beatDetectionHandler: TempiBeatDetectionCallback!
     
@@ -88,6 +90,11 @@ class TempiBeatDetector: NSObject {
     }
     
     func setupCommon() {
+        if (self.fft == nil) {
+            self.fft = TempiFFT(withSize: self.chunkSize, sampleRate: self.sampleRate)
+            self.fft.windowType = TempiFFTWindowType.hanning
+        }
+        
         self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
         self.fluxTimeStamps = [Double]()
         self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
@@ -172,14 +179,12 @@ class TempiBeatDetector: NSObject {
     }
     
     private func calculateFlux(timeStamp timeStamp: Double, samples: [Float]) -> (flux: Float, success: Bool) {
-        let fft: TempiFFT = TempiFFT(withSize: self.chunkSize, sampleRate: self.sampleRate)
-        fft.windowType = TempiFFTWindowType.hanning
-        fft.fftForward(samples)
+        self.fft.fftForward(samples)
         
         switch self.frequencyBands {
-            case 6:     fft.calculateLogarithmicBands(minFrequency: 100, maxFrequency: 5512, bandsPerOctave: 1)
-            case 12:    fft.calculateLogarithmicBands(minFrequency: 100, maxFrequency: 5512, bandsPerOctave: 2)
-            case 30:    fft.calculateLogarithmicBands(minFrequency: 100, maxFrequency: 5512, bandsPerOctave: 5)
+            case 6:     self.fft.calculateLogarithmicBands(minFrequency: 100, maxFrequency: 5512, bandsPerOctave: 1)
+            case 12:    self.fft.calculateLogarithmicBands(minFrequency: 100, maxFrequency: 5512, bandsPerOctave: 2)
+            case 30:    self.fft.calculateLogarithmicBands(minFrequency: 100, maxFrequency: 5512, bandsPerOctave: 5)
             default:    assert(false, "Unsupported number of bands.")
         }
         
@@ -190,7 +195,7 @@ class TempiBeatDetector: NSObject {
         
         var diffs: Array = [Float]()
         for i in 0..<self.frequencyBands {
-            var mag = fft.magnitudeAtBand(i)
+            var mag = self.fft.magnitudeAtBand(i)
 
             // log requires > 0
             mag = max(mag, 0.00000001)

@@ -126,17 +126,19 @@ import Accelerate
         var analysisBuffer = inMonoBuffer
         
         // If we have a window, apply it now. Since 99.9% of the time the window array will be exactly the same, an optimization would be to create it once and cache it, possibly caching it by size.
-        // TODO: Optimize
-        if windowType != .none {
-            window = [Float](count: size, repeatedValue: 0.0)
+        if self.windowType != .none {
             
-            switch windowType {
-            case .hamming:
-                vDSP_hann_window(&window!, UInt(size), Int32(vDSP_HANN_NORM))
-            case .hanning:
-                vDSP_hamm_window(&window!, UInt(size), 0)
-            default:
-                break
+            if self.window == nil {
+                self.window = [Float](count: size, repeatedValue: 0.0)
+                
+                switch self.windowType {
+                case .hamming:
+                    vDSP_hann_window(&self.window!, UInt(size), Int32(vDSP_HANN_NORM))
+                case .hanning:
+                    vDSP_hamm_window(&self.window!, UInt(size), 0)
+                default:
+                    break
+                }
             }
             
             // Apply the window

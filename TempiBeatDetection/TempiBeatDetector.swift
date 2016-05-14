@@ -226,7 +226,9 @@ class TempiBeatDetector: NSObject {
         var bpms: [Float] = [Float]()
         var maxCorrValue: Float = 0.0
         
-        // Perform the analysis of each band on a separate thread using GCD
+        // Perform the analysis of each band on a separate thread using GCD.
+        // (The speedup from parallelism here isn't earth-shattering - in the 5-10% range - 
+        // but still seems like the right thing to do...)
         let group = dispatch_group_create()
         
         for i in 0..<self.frequencyBands {

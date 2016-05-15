@@ -36,13 +36,11 @@ class TempiBeatDetector: NSObject {
     var beatDetectionHandler: TempiBeatDetectionCallback!
     
     private var audioInput: TempiAudioInput!
-    private var peakDetector: TempiPeakDetector!
     private var lastMagnitudes: [Float]!
     
     // For autocorrelation analysis
     private var fluxHistory: [[Float]]! // Holds calculated flux values for each band
     private var fluxHistoryLength: Double = 12.0 // Save the last N seconds of flux values
-    private var fluxMinimumHistoryLengthForAnalysis: Double = 2.0
     private var fluxTimeStamps: [Double]!
     private let correlationValueThreshold: Float = 0.15 // Any correlations less than this are not reported. Higher numbers produce more accuracy but sparser reporting.
 
@@ -57,9 +55,15 @@ class TempiBeatDetector: NSObject {
 
     private var firstPass: Bool = true
     
+    // Timing
+    private var analysisInterval: Double = 1.0
+    private var lastAnalyzeTime: Double!
+    private var startTime: Double!
+    private var preRollTime: Double = 3.0
+    
     // For validation
-    var startTime: Double = 0.0
-    var endTime: Double = 0.0
+    var mediaStartTime: Double = 0.0
+    var mediaEndTime: Double = 0.0
     var savePlotData: Bool = false
     var testTotal: Int = 0
     var testCorrect: Int = 0
@@ -99,14 +103,11 @@ class TempiBeatDetector: NSObject {
         self.fluxTimeStamps = [Double]()
         self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
         
-        self.peakDetector = TempiPeakDetector(peakDetectionCallback: { (timeStamp, magnitude) in
-            self.handlePeak(timeStamp: timeStamp, magnitude: magnitude)
-            }, sampleRate: self.sampleRate / Float(self.hopSize))
-        
-        self.peakDetector.coalesceInterval = 0.2
         self.lastMeasuredTempo = 0
         self.confidence = 0
         self.firstPass = true
+        self.lastAnalyzeTime = nil
+        self.startTime = nil
     }
 
     private func setupInput() {
@@ -125,7 +126,15 @@ class TempiBeatDetector: NSObject {
             fputs("\(timeStamp) \(flux)\n", self.plotFFTDataFile)
         }
 
-        self.peakDetector.addMagnitude(timeStamp: timeStamp, magnitude: flux)
+        if self.startTime == nil {
+            self.startTime = timeStamp
+        }
+        
+        if timeStamp - self.startTime >= self.preRollTime &&
+            (self.lastAnalyzeTime == nil || timeStamp - self.lastAnalyzeTime > self.analysisInterval) {
+            self.lastAnalyzeTime = timeStamp
+            self.analyzeTimer(timeStamp: timeStamp)
+        }
         
         self.fluxTimeStamps.append(timeStamp)
         
@@ -139,6 +148,10 @@ class TempiBeatDetector: NSObject {
     }
     
     // MARK: - Private stuff
+    
+    private func analyzeTimer(timeStamp timeStamp: Double) {
+        self.performMultiBandCorrelationAnalysis(timeStamp: timeStamp)
+    }
     
     private func handleMicAudio(timeStamp timeStamp: Double, numberOfFrames:Int, samples:[Float]) {
         
@@ -164,18 +177,6 @@ class TempiBeatDetector: NSObject {
         }
         
         self.savedTimeStamp = nil
-    }
-
-    private func handlePeak(timeStamp timeStamp: Double, magnitude: Float) {
-        
-        if self.savePlotData {
-            fputs("\(timeStamp) 1\n", self.plotMarkersFile)
-        }
-        
-        // If we have enough data, perform autocorrelation. This might generate a bpm reading.
-        if self.fluxHistory[0].count > 2 && (self.fluxTimeStamps.last! - self.fluxTimeStamps.first! >= self.fluxMinimumHistoryLengthForAnalysis) {
-            self.performMultiBandCorrelationAnalysis(timeStamp: timeStamp)
-        }
     }
     
     private func calculateFlux(timeStamp timeStamp: Double, samples: [Float]) -> (flux: Float, success: Bool) {

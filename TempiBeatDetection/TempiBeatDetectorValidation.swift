@@ -70,8 +70,8 @@ extension TempiBeatDetector {
         
         self.currentTestName = label
         
-        self.startTime = startTime
-        self.endTime = endTime
+        self.mediaStartTime = startTime
+        self.mediaEndTime = endTime
         
         self.minTempo = minTempo
         self.maxTempo = maxTempo
@@ -158,8 +158,8 @@ extension TempiBeatDetector {
             while queuedFileSamples.count >= self.chunkSize {
                 let timeStamp: Double = Double(samplePtr) / Double(self.sampleRate)
                 
-                if self.endTime > 0.01 {
-                    if timeStamp < self.startTime || timeStamp > self.endTime {
+                if self.mediaEndTime > 0.01 {
+                    if timeStamp < self.mediaStartTime || timeStamp > self.mediaEndTime {
                         queuedFileSamples.removeFirst(self.hopSize)
                         samplePtr += self.hopSize
                         continue
@@ -323,7 +323,7 @@ extension TempiBeatDetector {
         
         self.testAudio("Home/Hard Top-2.mp3",
                        label: "hard-top2",
-                       actualTempo: 150,
+                       actualTempo: 151,
                        minTempo: 80, maxTempo: 160,
                        variance: 2)
         

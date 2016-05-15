@@ -25,10 +25,10 @@ Using the ```TempiBeatDetector``` class in your project is simple and I've inclu
 
 A robust validation system is critical to evaluating changes made to the beat detection algorithm. The project utilizes Xcode's unit testing infrastructure to perform validation, so just type Command-U to start it. The project includes sample audio files in the 'Test Media' directory which are typically 15-20s in length and categorized into Home, Studio, Threes, and Utility. Here are the current validation results:
 
-- Studio set: 94.3%
-- Home set: 94.1%
-- Threes set: 24.2%
-- Utility set: 80.8%
+- Studio set: 96.4%
+- Home set: 94%
+- Threes set: 25.7%
+- Utility set: 84.3%
 
 While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Peak detection plots' directory. The plotData file contains time stamps and magnitudes while the plotMarkers file contains time stamps and a marker for each detected peak.
 
@@ -41,10 +41,7 @@ I use the free Mac app [Abscissa](http://rbruehl.macbay.de) to visualize the plo
 
 <b>To-do</b>
 
-- <b>Accuracy improvements!</b>
- - Try emphasizing bass (low pass filter)
- - Neural networks (I did a lot of work in this area already with mixed results. Email me for more info.)
- - Work on 3/4, 6/8, etc
+- Identify 3/4, 6/8, 12/8, etc. Right now the algorithm just always assumes 4/4 so anything in 3/4 is horribly off.
 - Add support for analyzing arbitrary streams of audio samples
 - More tests
 - Evaluate (and improve, if necessary) impact on battery life

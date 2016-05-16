@@ -51,10 +51,8 @@ class TempiBeatDetector: NSObject {
     
     // Confidence ratings
     private var confidence: Int = 0
-    private var lastMeasuredTempo: Float = 0.0
+    private var lastMeasuredTempo: Float!
 
-    private var firstPass: Bool = true
-    
     // Timing
     private var analysisInterval: Double = 1.0
     private var lastAnalyzeTime: Double!
@@ -70,7 +68,7 @@ class TempiBeatDetector: NSObject {
     var testSetResults: [Float]!
     var testActualTempo: Float = 0
     var currentTestName, currentTestSetName: String!
-    var plotFFTDataFile, plotMarkersFile, plotAudioSamplesFile: UnsafeMutablePointer<FILE>!
+    var plotFluxValuesDataFile, plotFluxValuesWithTimeStampsDataFile: UnsafeMutablePointer<FILE>!
     var allow2XResults: Bool = true
     var allowedTempoVariance: Float = 2.0
     
@@ -103,9 +101,8 @@ class TempiBeatDetector: NSObject {
         self.fluxTimeStamps = [Double]()
         self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
         
-        self.lastMeasuredTempo = 0
+        self.lastMeasuredTempo = nil
         self.confidence = 0
-        self.firstPass = true
         self.lastAnalyzeTime = nil
         self.startTime = nil
     }
@@ -123,7 +120,8 @@ class TempiBeatDetector: NSObject {
         }
         
         if self.savePlotData {
-            fputs("\(timeStamp) \(flux)\n", self.plotFFTDataFile)
+            fputs("\(flux)\n", self.plotFluxValuesDataFile)
+            fputs("\(timeStamp) \(flux)\n", self.plotFluxValuesWithTimeStampsDataFile)
         }
 
         if self.startTime == nil {
@@ -211,12 +209,6 @@ class TempiBeatDetector: NSObject {
             diffs.append(flux)
         }
         
-        if self.firstPass {
-            // Don't act on the very first pass since there are no diffs to compare.
-            self.firstPass = false
-            return (0.0, false)
-        }
-
         return (tempi_median(diffs), true)
     }
     
@@ -234,7 +226,7 @@ class TempiBeatDetector: NSObject {
         
         for i in 0..<self.frequencyBands {
             dispatch_group_async(group, dispatch_get_global_queue(0, 0), {
-                let (corr, bpm) = self.performSingleCorrelationAnalysis(self.fluxHistory[i])
+                let (corr, bpm) = self.performSingleCorrelationAnalysis(timeStamp: timeStamp, fluxValues: self.fluxHistory[i])
                 if let corr = corr, bpm = bpm {
                     tempi_synchronized(self) {
                         if corr > maxCorrValue {
@@ -262,7 +254,7 @@ class TempiBeatDetector: NSObject {
         return maxCorrValue
     }
     
-    private func performSingleCorrelationAnalysis(fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?) {
+    private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?) {
         var corr = tempi_autocorr(fluxValues, normalize: true)
         corr = Array(corr[0..<fluxValues.count])
         
@@ -310,7 +302,7 @@ class TempiBeatDetector: NSObject {
             adjustedConfidence = 0
         }
         
-        if self.lastMeasuredTempo == 0 || self.tempo(bpm, isNearTempo: self.lastMeasuredTempo, epsilon: 2.0) {
+        if self.lastMeasuredTempo == nil || self.tempo(bpm, isNearTempo: self.lastMeasuredTempo, epsilon: 2.0) {
             // The tempo remained constant. Bump our confidence up a notch.
             self.confidence = min(10, self.confidence + 1)
         } else if adjustedConfidence > 2 && self.tempo(bpm, isMultipleOf: self.lastMeasuredTempo, multiple: &multiple) {

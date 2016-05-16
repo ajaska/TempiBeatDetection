@@ -12,10 +12,10 @@ import Accelerate
 extension TempiBeatDetector {
     
     func validate() {
-        self.validateStudioSet1()
-        self.validateHomeSet1()
-//        self.validateThreesSet1()
+//        self.validateStudioSet1()
+//        self.validateHomeSet1()
         self.validateUtilitySet1()
+//        self.validateThreesSet1()
 
 //        self.oneOffTest()
     }
@@ -32,16 +32,21 @@ extension TempiBeatDetector {
             var plotFluxValuesURL = projectURL.URLByAppendingPathComponent("Plots")
             plotFluxValuesURL = plotFluxValuesURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValues.txt")
             
-            var plotFluxValuesWithTimeStamplsURL = projectURL.URLByAppendingPathComponent("Plots")
-            plotFluxValuesWithTimeStamplsURL = plotFluxValuesWithTimeStamplsURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValuesWithTimeStamps.txt")
+            var plotMedianFluxValuesWithTimeStamplsURL = projectURL.URLByAppendingPathComponent("Plots")
+            plotMedianFluxValuesWithTimeStamplsURL = plotMedianFluxValuesWithTimeStamplsURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValuesWithTimeStamps.txt")
             
+            var plotFullBandFluxValuesWithTimeStamplsURL = projectURL.URLByAppendingPathComponent("Plots")
+            plotFullBandFluxValuesWithTimeStamplsURL = plotFullBandFluxValuesWithTimeStamplsURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxFullBandValuesWithTimeStamps.txt")
+
             do {
                 try NSFileManager.defaultManager().removeItemAtURL(plotFluxValuesURL)
-                try NSFileManager.defaultManager().removeItemAtURL(plotFluxValuesWithTimeStamplsURL)
+                try NSFileManager.defaultManager().removeItemAtURL(plotMedianFluxValuesWithTimeStamplsURL)
+                try NSFileManager.defaultManager().removeItemAtURL(plotFullBandFluxValuesWithTimeStamplsURL)
             } catch _ { /* normal if file not yet created */ }
             
             self.plotFluxValuesDataFile = fopen(plotFluxValuesURL.fileSystemRepresentation, "w")
-            self.plotFluxValuesWithTimeStampsDataFile = fopen(plotFluxValuesWithTimeStamplsURL.fileSystemRepresentation, "w")
+            self.plotMedianFluxValuesWithTimeStampsDataFile = fopen(plotMedianFluxValuesWithTimeStamplsURL.fileSystemRepresentation, "w")
+            self.plotFullBandFluxValuesWithTimeStampsDataFile = fopen(plotFullBandFluxValuesWithTimeStamplsURL.fileSystemRepresentation, "w")
         }
         
         self.testTotal = 0
@@ -180,7 +185,8 @@ extension TempiBeatDetector {
         
         if self.savePlotData {
             fclose(self.plotFluxValuesDataFile)
-            fclose(self.plotFluxValuesWithTimeStampsDataFile)
+            fclose(self.plotMedianFluxValuesWithTimeStampsDataFile)
+            fclose(self.plotFullBandFluxValuesWithTimeStampsDataFile)
         }
         
         self.validationFinish()

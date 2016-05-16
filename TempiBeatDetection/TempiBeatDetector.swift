@@ -68,7 +68,7 @@ class TempiBeatDetector: NSObject {
     var testSetResults: [Float]!
     var testActualTempo: Float = 0
     var currentTestName, currentTestSetName: String!
-    var plotFluxValuesDataFile, plotFluxValuesWithTimeStampsDataFile: UnsafeMutablePointer<FILE>!
+    var plotFluxValuesDataFile, plotMedianFluxValuesWithTimeStampsDataFile, plotFullBandFluxValuesWithTimeStampsDataFile: UnsafeMutablePointer<FILE>!
     var allow2XResults: Bool = true
     var allowedTempoVariance: Float = 2.0
     
@@ -121,7 +121,12 @@ class TempiBeatDetector: NSObject {
         
         if self.savePlotData {
             fputs("\(flux)\n", self.plotFluxValuesDataFile)
-            fputs("\(timeStamp) \(flux)\n", self.plotFluxValuesWithTimeStampsDataFile)
+            fputs("\(timeStamp) \(flux)\n", self.plotMedianFluxValuesWithTimeStampsDataFile)
+            var plotStr = ""
+            for i in fluxHistory {
+                plotStr = plotStr + " \(i.last!)"
+            }
+            fputs("\(timeStamp)\(plotStr)\n", self.plotFullBandFluxValuesWithTimeStampsDataFile)
         }
 
         if self.startTime == nil {
@@ -261,10 +266,10 @@ class TempiBeatDetector: NSObject {
         // Get the top 40 correlations
         var maxes = tempi_max_n(corr, n: 40)
         
-        // Throw away indices < 20. Those are all 'echoes' of the original signal.
+        // Throw away indices < 50. Those are all 'echoes' of the original signal.
         maxes = maxes.filter({
             // NB: tempi_max_n returns a tuple. The .0 element is the index into the correlation sequence.
-            return $0.0 >= 20
+            return $0.0 >= 50
         })
         
         if maxes.count == 0 {

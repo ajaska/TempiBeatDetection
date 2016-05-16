@@ -22,7 +22,7 @@ class TempiBeatDetectionTests: XCTestCase {
     }
     
     func testValidation() {
-        beatDetector.savePlotData = true
+        beatDetector.savePlotData = false
         beatDetector.validate()
     }
     

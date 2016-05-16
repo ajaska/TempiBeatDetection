@@ -12,8 +12,8 @@ import Accelerate
 extension TempiBeatDetector {
     
     func validate() {
-//        self.validateStudioSet1()
-//        self.validateHomeSet1()
+        self.validateStudioSet1()
+        self.validateHomeSet1()
 //        self.validateThreesSet1()
         self.validateUtilitySet1()
 
@@ -29,19 +29,19 @@ extension TempiBeatDetector {
         if self.savePlotData {
             let projectURL: NSURL = self.projectURL()
             
-            var plotDataURL = projectURL.URLByAppendingPathComponent("Peak detection plots")
-            plotDataURL = plotDataURL.URLByAppendingPathComponent("\(self.currentTestName)-plotData.txt")
+            var plotFluxValuesURL = projectURL.URLByAppendingPathComponent("Plots")
+            plotFluxValuesURL = plotFluxValuesURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValues.txt")
             
-            var plotMarkersURL = projectURL.URLByAppendingPathComponent("Peak detection plots")
-            plotMarkersURL = plotMarkersURL.URLByAppendingPathComponent("\(self.currentTestName)-plotMarkers.txt")
+            var plotFluxValuesWithTimeStamplsURL = projectURL.URLByAppendingPathComponent("Plots")
+            plotFluxValuesWithTimeStamplsURL = plotFluxValuesWithTimeStamplsURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValuesWithTimeStamps.txt")
             
             do {
-                try NSFileManager.defaultManager().removeItemAtURL(plotDataURL)
-                try NSFileManager.defaultManager().removeItemAtURL(plotMarkersURL)
+                try NSFileManager.defaultManager().removeItemAtURL(plotFluxValuesURL)
+                try NSFileManager.defaultManager().removeItemAtURL(plotFluxValuesWithTimeStamplsURL)
             } catch _ { /* normal if file not yet created */ }
             
-            self.plotFFTDataFile = fopen(plotDataURL.fileSystemRepresentation, "w")
-            self.plotMarkersFile = fopen(plotMarkersURL.fileSystemRepresentation, "w")
+            self.plotFluxValuesDataFile = fopen(plotFluxValuesURL.fileSystemRepresentation, "w")
+            self.plotFluxValuesWithTimeStampsDataFile = fopen(plotFluxValuesWithTimeStamplsURL.fileSystemRepresentation, "w")
         }
         
         self.testTotal = 0
@@ -179,8 +179,8 @@ extension TempiBeatDetector {
         print("Finished testing: \(path)")
         
         if self.savePlotData {
-            fclose(self.plotFFTDataFile)
-            fclose(self.plotMarkersFile)
+            fclose(self.plotFluxValuesDataFile)
+            fclose(self.plotFluxValuesWithTimeStampsDataFile)
         }
         
         self.validationFinish()
@@ -386,6 +386,20 @@ extension TempiBeatDetector {
                        minTempo: 60, maxTempo: 120,
                        variance: 2)
         
+        self.testAudio("Threes/metronome-3-88.mp3",
+                       label: "metronome-3-88",
+                       actualTempo: 88,
+                       startTime: 0, endTime: 10,
+                       minTempo: 60, maxTempo: 120,
+                       variance: 1)
+        
+        self.testAudio("Threes/metronome-3-126.mp3",
+                       label: "metronome-3-126",
+                       actualTempo: 126,
+                       startTime: 0, endTime: 15,
+                       minTempo: 80, maxTempo: 160,
+                       variance: 1)
+
         
         self.testSetFinish()
     }
@@ -429,25 +443,18 @@ extension TempiBeatDetector {
                        minTempo: 60, maxTempo: 120,
                        variance: 1)
 
-        self.testAudio("Utility/metronome-88.mp3",
-                       label: "metronome-88",
+        self.testAudio("Utility/metronome-4-88.mp3",
+                       label: "metronome-4-88",
                        actualTempo: 88,
                        startTime: 0, endTime: 10,
                        minTempo: 60, maxTempo: 120,
                        variance: 1)
 
-        self.testAudio("Utility/metronome-126.mp3",
-                       label: "metronome-126",
+        self.testAudio("Utility/metronome-4-126.mp3",
+                       label: "metronome-4-126",
                        actualTempo: 126,
                        startTime: 0, endTime: 15,
                        minTempo: 80, maxTempo: 160,
-                       variance: 1)
-
-        self.testAudio("Utility/1sTones.mp3",
-                       label: "1s-tones",
-                       actualTempo: 60,
-                       startTime: 0, endTime: 10,
-                       minTempo: 60, maxTempo: 120,
                        variance: 1)
 
         self.testSetFinish()

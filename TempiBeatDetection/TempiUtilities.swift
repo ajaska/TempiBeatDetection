@@ -73,6 +73,31 @@ func tempi_mode(a: [Float], minFrequency: Int) -> Float? {
     return modeValue
 }
 
+func tempi_mode_int(a: [Int]) -> Int {
+    var buckets = [Int : Int]()
+    for i in a {
+        if buckets[i] == nil {
+            buckets[i] = 1
+        } else {
+            buckets[i]! += 1
+        }
+    }
+    
+    var modeValue: Int = 0
+    
+    // By starting at minFrequency - 1, we require that the mode value occur at least minFrequency times
+    var maxFreq = 0
+    
+    for (value, freq) in buckets {
+        if freq > maxFreq {
+            modeValue = value
+            maxFreq = freq
+        }
+    }
+    
+    return modeValue
+}
+
 func tempi_dump_array(a: [Float]) {
     for f in a {
         print(String(format:"%.03f", f))

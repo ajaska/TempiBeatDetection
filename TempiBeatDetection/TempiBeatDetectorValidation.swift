@@ -14,10 +14,10 @@ extension TempiBeatDetector {
     func validate() {
 //        self.validateStudioSet1()
 //        self.validateHomeSet1()
-        self.validateUtilitySet1()
+//        self.validateUtilitySet1()
 //        self.validateThreesSet1()
 
-//        self.oneOffTest()
+        self.oneOffTest()
     }
     
     private func projectURL() -> NSURL {
@@ -57,6 +57,31 @@ extension TempiBeatDetector {
         let result = 100.0 * Float(self.testCorrect) / Float(self.testTotal)
         print(String(format:"[%@] accuracy: %.01f%%\n", self.currentTestName, result))
         self.testSetResults.append(result)
+        
+        self.printBandPeriods()
+    }
+    
+    private func printBandPeriods() {
+        for i in 0..<self.periodHistory.count {
+            let bandPeriods = self.periodHistory[i]
+            print("[\(i)]: ", terminator:"")
+            for j in bandPeriods {
+                print("\(j),", terminator:"")
+            }
+            print("")
+        }
+    }
+    
+    private func printBandPeriodsFlat() {
+        for i in 0..<self.periodHistory.count {
+            if i == 0 || i == 11 {
+                continue
+            }
+            let bandPeriods = self.periodHistory[i]
+            for j in bandPeriods {
+                print("\(j)")
+            }
+        }
     }
     
     private func testAudio(path: String,
@@ -206,11 +231,14 @@ extension TempiBeatDetector {
     private func oneOffTest() {
         self.testSetSetupForSetName("oneOff")
 
-        self.testAudio("Utility/full-clave-65.mp3",
-                       label: "full-clave-65",
-                       actualTempo: 65,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
+        //self.savePlotData = true
+        
+        self.testAudio("Threes/Norwegian Wood.mp3",
+                       label: "norwegian-wood",
+                       actualTempo: 182,
+                       startTime: 0, endTime: 0,
+                       minTempo: 100, maxTempo: 200,
+                       variance: 3)
         
         self.testSetFinish()
     }

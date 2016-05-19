@@ -59,6 +59,11 @@ class TempiBeatDetector: NSObject {
     private var startTime: Double!
     private var preRollTime: Double = 3.0
     
+    // Time signature detection
+    var periodHistory: [[Int]]!
+    private let periodHistoryLength = 10
+    private var currentTimeSignatureFactor: Float = 4.0
+    
     // For validation
     var mediaStartTime: Double = 0.0
     var mediaEndTime: Double = 0.0
@@ -100,6 +105,8 @@ class TempiBeatDetector: NSObject {
         self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
         self.fluxTimeStamps = [Double]()
         self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
+        
+        self.periodHistory = [[Int]].init(count: self.frequencyBands, repeatedValue: [Int]())
         
         self.lastMeasuredTempo = nil
         self.confidence = 0
@@ -229,15 +236,23 @@ class TempiBeatDetector: NSObject {
         // but still seems like the right thing to do...)
         let group = dispatch_group_create()
         
+        self.timeSignatureEvaluation()
+        
         for i in 0..<self.frequencyBands {
             dispatch_group_async(group, dispatch_get_global_queue(0, 0), {
-                let (corr, bpm) = self.performSingleCorrelationAnalysis(timeStamp: timeStamp, fluxValues: self.fluxHistory[i])
-                if let corr = corr, bpm = bpm {
-                    tempi_synchronized(self) {
+                let (corr, bpm, period) = self.performSingleCorrelationAnalysis(timeStamp: timeStamp, fluxValues: self.fluxHistory[i])
+                tempi_synchronized(self) {
+                    if let corr = corr, bpm = bpm {
                         if corr > maxCorrValue {
                             maxCorrValue = corr
                         }
                         bpms.append(bpm)
+                    }
+                    if let period = period {
+                        self.periodHistory[i].append(period)
+                    }
+                    if self.periodHistory[i].count > self.periodHistoryLength {
+                        self.periodHistory[i].removeFirst()
                     }
                 }
             })
@@ -249,7 +264,7 @@ class TempiBeatDetector: NSObject {
             print(String(format: "%.02f: ** low correlation %.02f", timeStamp, maxCorrValue))
             return maxCorrValue
         }
-
+        
         // I think this method makes more sense than taking the median, but there's a slight negative impact on accuracy
         // which is probably related to other issues. Come back to it.
 //        var estimatedBPM: Float
@@ -268,7 +283,7 @@ class TempiBeatDetector: NSObject {
         return maxCorrValue
     }
     
-    private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?) {
+    private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?, period: Int?) {
         var corr = tempi_autocorr(fluxValues, normalize: true)
         corr = Array(corr[0..<fluxValues.count])
         
@@ -282,17 +297,18 @@ class TempiBeatDetector: NSObject {
         })
         
         if maxes.count == 0 {
-            return (nil, nil)
+            return (nil, nil, nil)
         }
         
         let corrValue: Float = maxes.first!.1
         
-        if corrValue < self.correlationValueThreshold {
-            return (nil, nil)
-        }
-        
         // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
         let period = maxes.first!.0
+
+        if corrValue < self.correlationValueThreshold {
+            return (nil, nil, period)
+        }
+        
         let interval = Float(period) * Float(self.hopSize) / self.sampleRate
         
         // The dominant period might be that of a repeating beat (8th or 4th note) or it might be that of a measure. If it's a measure then we'll
@@ -300,19 +316,78 @@ class TempiBeatDetector: NSObject {
         // We can make a decent guess as to beat vs. measure by comparing the interval to the theoretical shortest possible measure.
         var beatInterval = interval
         let shortestPossibleMeasure = 60.0 / self.maxTempo * 3.0
+        let longestPossibleMeasure = 60.0 / self.minTempo * 3.0
+        while beatInterval > longestPossibleMeasure {
+            beatInterval /= 2.0
+        }
         if beatInterval >= shortestPossibleMeasure {
-            let timeSigFactor: Float = 4.0 // magic needed to correctly make this determination
-            beatInterval = beatInterval / timeSigFactor
+            beatInterval = beatInterval / self.currentTimeSignatureFactor
         }
         
         let mappedInterval = self.mapInterval(Double(beatInterval))
         
         let bpm = 60.0 / Float(mappedInterval)
         
-        return (corrValue, bpm)
+        return (corrValue, bpm, period)
     }
     
     // MARK: -
+    
+    private func timeSignatureEvaluation() {
+        var allPeriods = [Int]()
+        for i in 0..<self.periodHistory.count {
+            if i==11 {
+                continue
+            }
+            for j in self.periodHistory[i] {
+                allPeriods.append(j)
+            }
+        }
+        
+        if allPeriods.isEmpty {
+            return
+        }
+        
+        let shortestPossibleMeasureDuration = 60.0 / self.maxTempo * 3.0
+        let longestPossibleMeasureDuration = 60.0 / self.minTempo * 3.0
+        let shortestPossibleMeasurePeriod: Int = Int(floorf(shortestPossibleMeasureDuration / (Float(self.hopSize) / self.sampleRate)))
+        let longestPossibleMeasurePeriod: Int = Int(floorf(longestPossibleMeasureDuration / (Float(self.hopSize) / self.sampleRate)))
+        let shortestPossibleBeatPeriod: Int = Int(longestPossibleMeasureDuration) / 4
+        
+        var possibleBeatPeriods = [Int]()
+        var possibleMeasurePeriods = [Int]()
+        
+        for i in allPeriods {
+            var new_i = i
+            if i < shortestPossibleMeasurePeriod {
+                while new_i < shortestPossibleBeatPeriod {
+                    new_i *= 2
+                }
+                possibleBeatPeriods.append(new_i)
+            } else {
+                while new_i > longestPossibleMeasurePeriod {
+                    new_i /= 2
+                }
+                possibleMeasurePeriods.append(new_i)
+            }
+        }
+        
+        if possibleBeatPeriods.isEmpty || possibleMeasurePeriods.isEmpty {
+            return
+        }
+        
+        let beatMode = tempi_mode_int(possibleBeatPeriods)
+        let measureMode = tempi_mode_int(possibleMeasurePeriods)
+        
+        let factor = Float(measureMode) / Float(beatMode)
+        
+        if self.tempo(factor, isNearTempo: 3.0, epsilon: 0.06) || self.tempo(factor, isNearTempo: 6.0, epsilon: 0.06) {
+            self.currentTimeSignatureFactor = 3.0
+        } else {
+            self.currentTimeSignatureFactor = 4.0
+        }
+//        print("Time sig factor: \(factor)")
+    }
     
     private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool = true) {
         var originalBPM = bpm

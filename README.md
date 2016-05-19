@@ -27,8 +27,8 @@ A robust validation system is critical to evaluating changes made to the beat de
 
 - Studio set: 96.4%
 - Home set: 94%
-- Threes set: 25.7%
-- Utility set: 84.3%
+- Utility set: 85.5%
+- Threes set: --
 
 While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Peak detection plots' directory. The plotData file contains time stamps and magnitudes while the plotMarkers file contains time stamps and a marker for each detected peak.
 

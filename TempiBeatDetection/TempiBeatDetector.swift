@@ -284,10 +284,17 @@ class TempiBeatDetector: NSObject {
         
         // The index of the first element is the 'lag' (think 'shift') of the signal that correlates the highest. This is our estimated period.
         let period = maxes.first!.0
-        let measureInterval = Float(period) * Float(self.hopSize) / self.sampleRate
+        let interval = Float(period) * Float(self.hopSize) / self.sampleRate
         
-        // Now we have to guess whether the song is in 4/4 or something else. Hmm.
-        let beatInterval = measureInterval / 4.0
+        // The dominant period might be that of a repeating beat (8th or 4th note) or it might be that of a measure. If it's a measure then we'll
+        // need some way to determine whether the song is in a 3-tempo or a 4-tempo before determining the beat interval (and currently we don't have that).
+        // We can make a decent guess as to beat vs. measure by comparing the interval to the theoretical shortest possible measure.
+        var beatInterval = interval
+        let shortestPossibleMeasure = 60.0 / self.maxTempo * 3.0
+        if beatInterval >= shortestPossibleMeasure {
+            let timeSigFactor: Float = 4.0 // magic needed to correctly make this determination
+            beatInterval = beatInterval / timeSigFactor
+        }
         
         let mappedInterval = self.mapInterval(Double(beatInterval))
         

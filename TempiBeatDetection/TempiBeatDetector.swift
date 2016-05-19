@@ -250,6 +250,15 @@ class TempiBeatDetector: NSObject {
             return maxCorrValue
         }
 
+        // I think this method makes more sense than taking the median, but there's a slight negative impact on accuracy
+        // which is probably related to other issues. Come back to it.
+//        var estimatedBPM: Float
+//        if let predominantBPM = tempi_mode(bpms, minFrequency: 2) {
+//            estimatedBPM = predominantBPM
+//        } else {
+//            estimatedBPM = tempi_median(bpms)
+//        }
+        
         let estimatedBPM = tempi_median(bpms)
         
         // Don't allow confidence utilization when doing correlation analysis since the 'confidence'
@@ -298,8 +307,9 @@ class TempiBeatDetector: NSObject {
         
         let mappedInterval = self.mapInterval(Double(beatInterval))
         
-        // Divide into 60 to get the bpm.
-        return (corrValue, 60.0 / Float(mappedInterval))
+        let bpm = 60.0 / Float(mappedInterval)
+        
+        return (corrValue, bpm)
     }
     
     // MARK: -

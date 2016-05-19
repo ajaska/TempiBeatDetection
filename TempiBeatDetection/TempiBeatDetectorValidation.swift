@@ -380,7 +380,7 @@ extension TempiBeatDetector {
         
         self.testAudio("Threes/Texas Flood.mp3",
                        label: "texas-flood",
-                       actualTempo: 60,
+                       actualTempo: 58, // Or should it be 175? There's disagreement about what a 'beat' is with 6/8 or 12/8 music.
                        startTime: 0, endTime: 20,
                        minTempo: 40, maxTempo: 120,
                        variance: 2)

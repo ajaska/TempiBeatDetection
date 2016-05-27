@@ -47,7 +47,30 @@ func tempi_mean(a: [Float]) -> Float {
     return mean
 }
 
-func tempi_mode(a: [Float], minFrequency: Int) -> Float? {
+func tempi_mode(a: [Float]) -> Float {
+    var buckets = [Int : (Int, Float)]()
+    for f in a {
+        let i = Int(roundf(f))
+        if buckets[i] == nil {
+            buckets[i] = (0, f)
+        }
+        buckets[i]!.0 += 1
+    }
+    
+    var modeValue: Float = 0
+    var maxFreq = 0
+    
+    for b in buckets.values {
+        if b.0 > maxFreq {
+            maxFreq = b.0
+            modeValue = b.1
+        }
+    }
+    
+    return modeValue
+}
+
+func tempi_custom_mode(a: [Float], minFrequency: Int) -> Float? {
     // A redefinition of 'mode' suited to our needs. The input values are rounded and nil is returned if a number doesn't occur at least minFrequency times.
     var buckets = [Int : (Int, Float)]()
     for f in a {

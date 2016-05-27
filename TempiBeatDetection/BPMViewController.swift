@@ -84,7 +84,7 @@ class BPMViewController: UIViewController {
 
     private func restartDetector() {
         self.bpmLabel.text = "——"
-        self.beatDetector.stop()
+        self.beatDetector.stopMicInput()
         self.beatDetector.startFromMic()
     }
     

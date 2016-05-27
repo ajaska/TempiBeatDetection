@@ -236,7 +236,7 @@ class TempiBeatDetector: NSObject {
         // but still seems like the right thing to do...)
         let group = dispatch_group_create()
         
-        self.timeSignatureEvaluation()
+        self.timeSignatureEvaluation(timeStamp: timeStamp)
         
         for i in 0..<self.frequencyBands {
             dispatch_group_async(group, dispatch_get_global_queue(0, 0), {
@@ -333,7 +333,7 @@ class TempiBeatDetector: NSObject {
     
     // MARK: -
     
-    private func timeSignatureEvaluation() {
+    private func timeSignatureEvaluation(timeStamp timeStamp: Double) {
         var allPeriods = [Int]()
         for i in 0..<self.periodHistory.count {
             if i==11 {

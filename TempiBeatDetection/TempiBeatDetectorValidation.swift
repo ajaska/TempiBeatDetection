@@ -168,20 +168,6 @@ extension TempiBeatDetector {
                     minTempo: 80, maxTempo: 160,
                     variance: 2.5)
             }, {
-                self.testAudio("Studio/Skinny Sweaty Man.mp3",
-                    label: "skinny-sweaty-man",
-                    actualTempo: 144,
-                    startTime: 0, endTime: 15,
-                    minTempo: 80, maxTempo: 160,
-                    variance: 3)
-            }, {
-                self.testAudio("Studio/Satisfaction.mp3",
-                    label: "satisfaction",
-                    actualTempo: 137,
-                    startTime: 0, endTime: 20,
-                    minTempo: 80, maxTempo: 160,
-                    variance: 2.5)
-            }, {
                 self.testAudio("Studio/Louie, Louie.mp3",
                     label: "louie-louie",
                     actualTempo: 120,

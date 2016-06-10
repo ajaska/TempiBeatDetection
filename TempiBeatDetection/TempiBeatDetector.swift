@@ -435,6 +435,8 @@ class TempiBeatDetector: NSObject {
         // The dominant period might be that of a repeating beat (8th or 4th note) or it might be that of a measure. If it's a measure then we'll
         // need some way to determine whether the song is in a 3-tempo or a 4-tempo before determining the beat interval (and currently we don't have that).
         // We can make a decent guess as to beat vs. measure by comparing the interval to the theoretical shortest possible measure.
+        // Why not discard measure-length periods and only rely on periods in the single beat range? Because some rhythms only reveal their period
+        // at the scope of a full measure or even two. E.g. the half or full clavé.
         var beatInterval = interval
         let shortestPossibleMeasure = 60.0 / self.maxTempo * 3.0
         if beatInterval >= shortestPossibleMeasure {

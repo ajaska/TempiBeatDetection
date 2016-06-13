@@ -73,6 +73,10 @@ extension TempiBeatDetector {
         print(String(format:"[%@] accuracy: %.01f%%\n", self.currentTestName, result))
         self.testSetResults.append(result)
         
+        print("Finished testing: \(self.mediaPath)")
+        
+        self.testNext()
+
         self.printBandPeriods()
     }
     
@@ -97,10 +101,6 @@ extension TempiBeatDetector {
                 print("\(j)")
             }
         }
-
-        print("Finished testing: \(self.mediaPath)")
-        
-        self.testNext()
     }
     
     private func testAudio(path: String,

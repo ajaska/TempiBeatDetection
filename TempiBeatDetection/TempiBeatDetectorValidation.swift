@@ -11,13 +11,22 @@ import Accelerate
 
 extension TempiBeatDetector {
     
-    func validate() {
-//        self.validateStudioSet1()
-//        self.validateHomeSet1()
-//        self.validateUtilitySet1()
-//        self.validateThreesSet1()
-
-        self.oneOffTest()
+    func validationStart() {
+        
+        // File-based beat detection runs asynchronously so in order for the unit test to not end prematurely we need to use a semaphore.
+        self.validationSemaphore = dispatch_semaphore_create(0)
+        
+        self.testSets = [{
+            self.validateStudioSet1() }
+            , { self.validateHomeSet1() }
+            , {self.validateUtilitySet1() }
+            , {self.validateThreesSet1() }
+//            , {self.oneOffTest() }
+            ]
+        
+        self.testSetNext()
+        
+        dispatch_semaphore_wait(self.validationSemaphore, DISPATCH_TIME_FOREVER)
     }
     
     private func projectURL() -> NSURL {
@@ -54,6 +63,12 @@ extension TempiBeatDetector {
     }
     
     private func validationFinish() {
+        if self.savePlotData {
+            fclose(self.plotFluxValuesDataFile)
+            fclose(self.plotMedianFluxValuesWithTimeStampsDataFile)
+            fclose(self.plotFullBandFluxValuesWithTimeStampsDataFile)
+        }
+
         let result = 100.0 * Float(self.testCorrect) / Float(self.testTotal)
         print(String(format:"[%@] accuracy: %.01f%%\n", self.currentTestName, result))
         self.testSetResults.append(result)
@@ -82,6 +97,10 @@ extension TempiBeatDetector {
                 print("\(j)")
             }
         }
+
+        print("Finished testing: \(self.mediaPath)")
+        
+        self.testNext()
     }
     
     private func testAudio(path: String,
@@ -94,133 +113,47 @@ extension TempiBeatDetector {
         let projectURL: NSURL = self.projectURL()
         let songURL = projectURL.URLByAppendingPathComponent("Test Media/\(path)")
         
-        let avAsset: AVURLAsset = AVURLAsset(URL: songURL)
-        
         print("Start testing: \(path); actual bpm: \(actualTempo)")
-        
+
+        self.validationSetup()
+
         self.currentTestName = label
-        
         self.mediaStartTime = startTime
         self.mediaEndTime = endTime
-        
         self.minTempo = minTempo
         self.maxTempo = maxTempo
-        
-        self.setupCommon()
-        self.validationSetup()
-        
         self.allowedTempoVariance = variance
-        
-        let assetReader: AVAssetReader
-        do {
-            assetReader = try AVAssetReader(asset: avAsset)
-        } catch let e as NSError {
-            print("*** AVAssetReader failed with \(e)")
-            return
-        }
-        
-        let settings: [String : AnyObject] = [ AVFormatIDKey : Int(kAudioFormatLinearPCM),
-                         AVSampleRateKey : self.sampleRate,
-                         AVLinearPCMBitDepthKey : 32,
-                         AVLinearPCMIsFloatKey : true,
-                         AVNumberOfChannelsKey : 1 ]
-        
-        let output: AVAssetReaderAudioMixOutput = AVAssetReaderAudioMixOutput.init(audioTracks: avAsset.tracks, audioSettings: settings)
-        
-        assetReader.addOutput(output)
-        
-        if !assetReader.startReading() {
-            print("assetReader.startReading() failed")
-            return
-        }
-        
-        var samplePtr: Int = 0
-        
         self.testActualTempo = actualTempo
-        
-        var queuedFileSamples: [Float] = [Float]()
-        
-        repeat {
-            var status: OSStatus = 0
-            guard let nextBuffer = output.copyNextSampleBuffer() else {
-                break
-            }
-            
-            let bufferSampleCnt = CMSampleBufferGetNumSamples(nextBuffer)
-            
-            var bufferList = AudioBufferList(
-                mNumberBuffers: 1,
-                mBuffers: AudioBuffer(
-                    mNumberChannels: 1,
-                    mDataByteSize: 4,
-                    mData: nil))
-            
-            var blockBuffer: CMBlockBuffer?
-            
-            status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(nextBuffer,
-                                                                             nil,
-                                                                             &bufferList,
-                                                                             sizeof(AudioBufferList),
-                                                                             nil,
-                                                                             nil,
-                                                                             kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
-                                                                             &blockBuffer)
-            
-            if status != 0 {
-                print("*** CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer failed with error \(status)")
-                break
-            }
-            
-            // Move samples from mData into our native [Float] format.
-            // (There's probably an better way to do this using UnsafeBufferPointer but I couldn't make it work.)
-            for i in 0..<bufferSampleCnt {
-                let ptr = UnsafePointer<Float>(bufferList.mBuffers.mData)
-                let newPtr = ptr + i
-                let sample = unsafeBitCast(newPtr.memory, Float.self)
-                queuedFileSamples.append(sample)
-            }
+        self.fileAnalysisCompletionHandler = {(bpms: [(timeStamp: Double, bpm: Float)], mean: Float, median: Float, mode: Float) in self.validationFinish()}
 
-            // We have a big buffer of audio (whatever CoreAudio decided to give us).
-            // Now iterate over the buffer, sending a chunkSize's (e.g. 4096 samples) worth of data to the analyzer and then
-            // shifting by hopSize (e.g. 132 samples) after each iteration. If there's not enough data in the buffer (bufferSampleCnt < chunkSize),
-            // then add the data to the queue and get the next buffer.
-
-            while queuedFileSamples.count >= self.chunkSize {
-                let timeStamp: Double = Double(samplePtr) / Double(self.sampleRate)
-                
-                if self.mediaEndTime > 0.01 {
-                    if timeStamp < self.mediaStartTime || timeStamp > self.mediaEndTime {
-                        queuedFileSamples.removeFirst(self.hopSize)
-                        samplePtr += self.hopSize
-                        continue
-                    }
-                }
-                
-                let subArray: [Float] = Array(queuedFileSamples[0..<self.chunkSize])
-                
-                self.analyzeAudioChunk(timeStamp: timeStamp, samples: subArray)
-                
-                samplePtr += self.hopSize
-                queuedFileSamples.removeFirst(self.hopSize)
-            }
-            
-        } while true
-        
-        print("Finished testing: \(path)")
-        
-        if self.savePlotData {
-            fclose(self.plotFluxValuesDataFile)
-            fclose(self.plotMedianFluxValuesWithTimeStampsDataFile)
-            fclose(self.plotFullBandFluxValuesWithTimeStampsDataFile)
-        }
-        
-        self.validationFinish()
+        self.startFromFile(url: songURL)
     }
     
     private func testSetSetupForSetName(setName: String) {
         print("Starting validation set \(setName)")
         self.currentTestSetName = setName
         self.testSetResults = [Float]()
+    }
+    
+    // If there's another test, run it. Otherwise move on to the next test set.
+    private func testNext() {
+        if self.tests.isEmpty {
+            self.testSetFinish()
+            self.testSetNext()
+        } else {
+            let test = self.tests.removeFirst()
+            test()
+        }
+    }
+    
+    // If there's another test set, start it. Otherwise signal the semaphore so validation can end.
+    private func testSetNext() {
+        if self.testSets.isEmpty {
+            dispatch_semaphore_signal(self.validationSemaphore)
+        } else {
+            let testSet = self.testSets.removeFirst()
+            testSet()
+        }
     }
     
     private func testSetFinish() {
@@ -231,266 +164,260 @@ extension TempiBeatDetector {
     private func oneOffTest() {
         self.testSetSetupForSetName("oneOff")
 
-        //self.savePlotData = true
-        
-        self.testAudio("Threes/Norwegian Wood.mp3",
-                       label: "norwegian-wood",
-                       actualTempo: 182,
-                       startTime: 0, endTime: 0,
-                       minTempo: 100, maxTempo: 200,
-                       variance: 3)
-        
-        self.testSetFinish()
-    }
-    
-    func validatePerformance() {
-        self.testSetSetupForSetName("validatePerformance")
-        
-        self.testAudio("Utility/half-clave-220.mp3",
-                       label: "half-clave-220",
-                       actualTempo: 220,
-                       minTempo: 120, maxTempo: 240,
-                       variance: 1)
-        
-        self.testSetFinish()
-    }
-    
-    private func validateStudioSet1 () {
-        self.testSetSetupForSetName("studioSet1")
-        
-        self.testAudio("Studio/Skinny Sweaty Man.mp3",
-                       label: "skinny-sweaty-man",
-                       actualTempo: 144,
-                       startTime: 0, endTime: 15,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 3)
-        
-        self.testAudio("Studio/Satisfaction.mp3",
-                       label: "satisfaction",
-                       actualTempo: 137,
-                       startTime: 0, endTime: 20,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2.5)
-
-        self.testAudio("Studio/Louie, Louie.mp3",
-                       label: "louie-louie",
-                       actualTempo: 120,
-                       startTime: 0, endTime: 15,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 3)
-
-        self.testAudio("Studio/Learn To Fly.mp3",
-                       label: "learn-to-fly",
-                       actualTempo: 136,
-                       startTime: 0, endTime: 15,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2)
-
-        self.testAudio("Studio/HBFS.mp3",
-                       label: "harder-better-faster-stronger",
-                       actualTempo: 123,
-                       startTime: 0, endTime: 15,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2)
-
-        self.testAudio("Studio/Waving Flag.mp3",
-                       label: "waving-flag",
-                       actualTempo: 76,
-                       startTime: 0, endTime: 15,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 2)
-
-        self.testAudio("Studio/Back in Black.mp3",
-                       label: "back-in-black",
-                       actualTempo: 90,
-                       startTime: 0, endTime: 15,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 2)
-
-        self.testSetFinish()
-    }
-    
-    private func validateHomeSet1 () {
-        self.testSetSetupForSetName("homeSet1")
-        
-        self.testAudio("Home/AG-Blackbird-1.mp3",
-                       label: "ag-blackbird1",
-                       actualTempo: 94,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 3)
-
-        self.testAudio("Home/AG-Blackbird-2.mp3",
-                       label: "ag-blackbird2",
-                       actualTempo: 96,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 3)
-        
-        self.testAudio("Home/AG-Sunset Road-116-1.mp3",
-                       label: "ag-sunsetroad1",
-                       actualTempo: 116,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2)
-        
-        self.testAudio("Home/AG-Sunset Road-116-2.mp3",
-                       label: "ag-sunsetroad2",
-                       actualTempo: 115,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2)
-        
-        self.testAudio("Home/Possum-1.mp3",
-                       label: "possum1",
-                       actualTempo: 79,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 2)
-        
-        self.testAudio("Home/Possum-2.mp3",
-                       label: "possum2",
-                       actualTempo: 81,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 3)
-        
-        self.testAudio("Home/Hard Top-1.mp3",
-                       label: "hard-top1",
-                       actualTempo: 140,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2)
-        
-        self.testAudio("Home/Hard Top-2.mp3",
-                       label: "hard-top2",
-                       actualTempo: 151,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 2)
-        
-        self.testAudio("Home/Definitely Delicate-1.mp3",
-                       label: "delicate1",
-                       actualTempo: 75,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 3)
-        
-        self.testAudio("Home/Wildwood Flower-1.mp3",
-                       label: "wildwood1",
-                       actualTempo: 95,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 3)
-        
-        self.testAudio("Home/Wildwood Flower-2.mp3",
-                       label: "wildwood2",
-                       actualTempo: 148,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 3)
-        
-        self.testSetFinish()
-    }
-    
-    private func validateThreesSet1 () {
-        self.testSetSetupForSetName("threesSet1")
-
-        self.testAudio("Threes/Norwegian Wood.mp3",
-                       label: "norwegian-wood",
-                       actualTempo: 182,
-                       startTime: 0, endTime: 0,
-                       minTempo: 100, maxTempo: 200,
-                       variance: 3)
-
-        self.testAudio("Threes/Drive In Drive Out.mp3",
-                       label: "drive-in-drive-out",
-                       actualTempo: 81,
-                       startTime: 0, endTime: 0,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 2)
-        
-        self.testAudio("Threes/Oh How We Danced.mp3",
-                       label: "oh-how-we-danced",
-                       actualTempo: 179,
-                       startTime: 0, endTime: 20,
-                       minTempo: 100, maxTempo: 200,
-                       variance: 3)
-        
-        self.testAudio("Threes/Texas Flood.mp3",
-                       label: "texas-flood",
-                       actualTempo: 58, // Or should it be 175? There's disagreement about what a 'beat' is with 6/8 or 12/8 music.
-                       startTime: 0, endTime: 20,
-                       minTempo: 40, maxTempo: 120,
-                       variance: 2)
-        
-        self.testAudio("Threes/Brahms Lullaby.mp3",
-                       label: "brahms-lullaby",
-                       actualTempo: 68,
-                       startTime: 0, endTime: 15,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 2)
-        
-        self.testAudio("Threes/metronome-3-88.mp3",
-                       label: "metronome-3-88",
-                       actualTempo: 88,
-                       startTime: 0, endTime: 10,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
-        
-        self.testAudio("Threes/metronome-3-126.mp3",
-                       label: "metronome-3-126",
-                       actualTempo: 126,
-                       startTime: 0, endTime: 15,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 1)
-
-        
-        self.testSetFinish()
-    }
-    
-    private func validateUtilitySet1 () {
-        self.testSetSetupForSetName("utilitySet1")
-
-        self.testAudio("Utility/half-clave-115.mp3",
-                       label: "half-clave-115",
-                       actualTempo: 115,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
-
-        self.testAudio("Utility/half-clave-220.mp3",
-                       label: "half-clave-220",
-                       actualTempo: 220,
-                       minTempo: 120, maxTempo: 240,
-                       variance: 1)
-
-        self.testAudio("Utility/half-clave-80.mp3",
-                       label: "half-clave-80",
-                       actualTempo: 80,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
-
-        self.testAudio("Utility/full-clave-105.mp3",
-                       label: "full-clave-105",
-                       actualTempo: 105,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
-
-        self.testAudio("Utility/full-clave-135.mp3",
-                       label: "full-clave-135",
-                       actualTempo: 135,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 1)
-
+        self.tests = [{
         self.testAudio("Utility/full-clave-65.mp3",
                        label: "full-clave-65",
                        actualTempo: 65,
                        minTempo: 60, maxTempo: 120,
                        variance: 1)
+            }]
+        
+        self.testNext()
+    }
+        
+    private func validateStudioSet1 () {
+        self.testSetSetupForSetName("studioSet1")
+        
+        self.tests = [{
+                self.testAudio("Studio/Skinny Sweaty Man.mp3",
+                    label: "skinny-sweaty-man",
+                    actualTempo: 144,
+                    startTime: 0, endTime: 15,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 3)
+            }, {
+                self.testAudio("Studio/Satisfaction.mp3",
+                    label: "satisfaction",
+                    actualTempo: 137,
+                    startTime: 0, endTime: 20,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2.5)
+            }, {
+                self.testAudio("Studio/Louie, Louie.mp3",
+                    label: "louie-louie",
+                    actualTempo: 120,
+                    startTime: 0, endTime: 15,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 3)
+            }, {
+                self.testAudio("Studio/Learn To Fly.mp3",
+                    label: "learn-to-fly",
+                    actualTempo: 136,
+                    startTime: 0, endTime: 15,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2)
+            }, {
+                self.testAudio("Studio/HBFS.mp3",
+                    label: "harder-better-faster-stronger",
+                    actualTempo: 123,
+                    startTime: 0, endTime: 15,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2)
+            }, {
+                self.testAudio("Studio/Waving Flag.mp3",
+                    label: "waving-flag",
+                    actualTempo: 76,
+                    startTime: 0, endTime: 15,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 2)
+            }, {
+                self.testAudio("Studio/Back in Black.mp3",
+                    label: "back-in-black",
+                    actualTempo: 90,
+                    startTime: 0, endTime: 15,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 2)
+            }]
+        
+        self.testNext()
+    }
+    
+    private func validateHomeSet1 () {
+        self.testSetSetupForSetName("homeSet1")
+        
+        self.tests = [{
+                self.testAudio("Home/AG-Blackbird-1.mp3",
+                    label: "ag-blackbird1",
+                    actualTempo: 94,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 3)
+            }, {
+                self.testAudio("Home/AG-Blackbird-2.mp3",
+                    label: "ag-blackbird2",
+                    actualTempo: 96,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 3)
+            }, {
+                self.testAudio("Home/AG-Sunset Road-116-1.mp3",
+                    label: "ag-sunsetroad1",
+                    actualTempo: 116,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2)
+            }, {
+                self.testAudio("Home/AG-Sunset Road-116-2.mp3",
+                    label: "ag-sunsetroad2",
+                    actualTempo: 115,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2)
+            }, {
+                self.testAudio("Home/Possum-1.mp3",
+                    label: "possum1",
+                    actualTempo: 79,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 2)
+            }, {
+                self.testAudio("Home/Possum-2.mp3",
+                    label: "possum2",
+                    actualTempo: 81,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 3)
+            }, {
+                self.testAudio("Home/Hard Top-1.mp3",
+                    label: "hard-top1",
+                    actualTempo: 140,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2)
+            }, {
+                self.testAudio("Home/Hard Top-2.mp3",
+                    label: "hard-top2",
+                    actualTempo: 151,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 2)
+            }, {
+                self.testAudio("Home/Definitely Delicate-1.mp3",
+                    label: "delicate1",
+                    actualTempo: 75,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 3)
+            }, {
+                self.testAudio("Home/Wildwood Flower-1.mp3",
+                    label: "wildwood1",
+                    actualTempo: 95,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 3)
+            }, {
+                self.testAudio("Home/Wildwood Flower-2.mp3",
+                    label: "wildwood2",
+                    actualTempo: 148,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 3)
+            }]
 
-        self.testAudio("Utility/metronome-4-88.mp3",
-                       label: "metronome-4-88",
-                       actualTempo: 88,
-                       startTime: 0, endTime: 10,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
+        self.testNext()
+}
+    
+    private func validateThreesSet1 () {
+        self.testSetSetupForSetName("threesSet1")
 
-        self.testAudio("Utility/metronome-4-126.mp3",
-                       label: "metronome-4-126",
-                       actualTempo: 126,
-                       startTime: 0, endTime: 15,
-                       minTempo: 80, maxTempo: 160,
-                       variance: 1)
+        self.tests = [{
+                self.testAudio("Threes/Norwegian Wood.mp3",
+                    label: "norwegian-wood",
+                    actualTempo: 182,
+                    startTime: 0, endTime: 0,
+                    minTempo: 100, maxTempo: 200,
+                    variance: 3)
+            }, {
+                self.testAudio("Threes/Drive In Drive Out.mp3",
+                    label: "drive-in-drive-out",
+                    actualTempo: 81,
+                    startTime: 0, endTime: 0,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 2)
+            }, {
+                self.testAudio("Threes/Oh How We Danced.mp3",
+                    label: "oh-how-we-danced",
+                    actualTempo: 179,
+                    startTime: 0, endTime: 20,
+                    minTempo: 100, maxTempo: 200,
+                    variance: 3)
+            }, {
+                self.testAudio("Threes/Texas Flood.mp3",
+                    label: "texas-flood",
+                    actualTempo: 58, // Or should it be 175? There's disagreement about what a 'beat' is with 6/8 or 12/8 music.
+                    startTime: 0, endTime: 20,
+                    minTempo: 40, maxTempo: 120,
+                    variance: 2)
+            }, {
+                self.testAudio("Threes/Brahms Lullaby.mp3",
+                    label: "brahms-lullaby",
+                    actualTempo: 68,
+                    startTime: 0, endTime: 15,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 2)
+            }, {
+                self.testAudio("Threes/metronome-3-88.mp3",
+                    label: "metronome-3-88",
+                    actualTempo: 88,
+                    startTime: 0, endTime: 10,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 1)
+            }, {
+                self.testAudio("Threes/metronome-3-126.mp3",
+                    label: "metronome-3-126",
+                    actualTempo: 126,
+                    startTime: 0, endTime: 15,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 1)
+            }]
+        
+        self.testNext()
+    }
+    
+    private func validateUtilitySet1 () {
+        self.testSetSetupForSetName("utilitySet1")
 
-        self.testSetFinish()
+        self.tests = [{
+                self.testAudio("Utility/half-clave-115.mp3",
+                    label: "half-clave-115",
+                    actualTempo: 115,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/half-clave-220.mp3",
+                    label: "half-clave-220",
+                    actualTempo: 220,
+                    minTempo: 120, maxTempo: 240,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/half-clave-80.mp3",
+                    label: "half-clave-80",
+                    actualTempo: 80,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/full-clave-105.mp3",
+                    label: "full-clave-105",
+                    actualTempo: 105,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/full-clave-135.mp3",
+                    label: "full-clave-135",
+                    actualTempo: 135,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/full-clave-65.mp3",
+                    label: "full-clave-65",
+                    actualTempo: 65,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/metronome-4-88.mp3",
+                    label: "metronome-4-88",
+                    actualTempo: 88,
+                    startTime: 0, endTime: 10,
+                    minTempo: 60, maxTempo: 120,
+                    variance: 1)
+            }, {
+                self.testAudio("Utility/metronome-4-126.mp3",
+                    label: "metronome-4-126",
+                    actualTempo: 126,
+                    startTime: 0, endTime: 15,
+                    minTempo: 80, maxTempo: 160,
+                    variance: 1)
+            }]
+        
+        self.testNext()
     }
 }

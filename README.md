@@ -21,6 +21,12 @@ Using the ```TempiBeatDetector``` class in your project is simple and I've inclu
 
 ![iPhone App](https://github.com/jscalo/TempiBeatDetection/blob/master/images/iphone-app.png "iPhone App")
 
+The library supports two modes:
+
+In <b>real-time mode</b>, Tempi analyzes input from the device microphone. Call ```startFromMic()``` and Tempi will begin sending updates to your beat detection callback (typically at 1 second increments). To stop analysis, call ```stopMicInput()```. Currently this mode is only supported on iOS.
+
+In <b>static mode</b>, Tempi analyzes the content of an audio file. Call ```startFromFile()``` with a file URL pointing to the audio file. If the ```beatDetectionHandler``` is set, Tempi sends tempo readings to your beat detection callback (typically at 1 second increments). If the ```fileAnalysisCompletionHandler``` is set, it's invoked when analysis has finished along with all detected tempos, a mean, a median, and a mode. If you only want to analyze a section of the audio file, set ```mediaStartTime``` and ```mediaEndTime``` before starting. Note that as in real-time mode, the detector runs asynchronously in static mode so plan accordingly (e.g. don't just call ```startFromFile()``` and exit).
+
 <b>Validation</b>
 
 A robust validation system is critical to evaluating changes made to the beat detection algorithm. The project utilizes Xcode's unit testing infrastructure to perform validation, so just type Command-U to start it. The project includes sample audio files in the 'Test Media' directory which are typically 15-20s in length and categorized into Home, Studio, Threes, and Utility. Here are the current validation results:
@@ -30,9 +36,7 @@ A robust validation system is critical to evaluating changes made to the beat de
 - Utility set: 85.5%
 - Threes set: --
 
-While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Peak detection plots' directory. The plotData file contains time stamps and magnitudes while the plotMarkers file contains time stamps and a marker for each detected peak.
-
-NB: With the recent work around autocorrelation the importance of peak detection has been mostly eliminated. However the "plotData" files are still relevant because they show the signal that's being fed to the autocorrelation algorithm.
+While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Plots' directory. The fluxValues file contains a stream of spectral flux values while the fluxValuesWithTimeStamps file contains (you guessed it) time stamps _and_ flux values.
 
 I use the free Mac app [Abscissa](http://rbruehl.macbay.de) to visualize the plots. E.g.:
 

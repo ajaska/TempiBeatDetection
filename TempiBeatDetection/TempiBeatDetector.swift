@@ -7,10 +7,18 @@
 
 import Foundation
 import Accelerate
+import AVFoundation
 
 typealias TempiBeatDetectionCallback = (
     timeStamp: Double,
     bpm: Float
+    ) -> Void
+
+typealias TempiFileAnalysisCompletionCallback = (
+    bpms: [(timeStamp: Double, bpm: Float)],
+    mean: Float,
+    median: Float,
+    mode: Float
     ) -> Void
 
 class TempiBeatDetector: NSObject {
@@ -34,6 +42,7 @@ class TempiBeatDetector: NSObject {
     var fft: TempiFFT!
 
     var beatDetectionHandler: TempiBeatDetectionCallback!
+    var fileAnalysisCompletionHandler: TempiFileAnalysisCompletionCallback!
     
     private var audioInput: TempiAudioInput!
     private var lastMagnitudes: [Float]!
@@ -64,9 +73,16 @@ class TempiBeatDetector: NSObject {
     private let periodHistoryLength = 10
     private var currentTimeSignatureFactor: Float = 4.0
     
-    // For validation
+    // File-based analysis
+    var mediaPath: String!
     var mediaStartTime: Double = 0.0
     var mediaEndTime: Double = 0.0
+    var mediaBPMs: [(timeStamp: Double, bpm: Float)]!
+    
+    // For validation
+    var validationSemaphore: dispatch_semaphore_t!
+    var tests: [() -> ()]!
+    var testSets: [() -> ()]!
     var savePlotData: Bool = false
     var testTotal: Int = 0
     var testCorrect: Int = 0
@@ -92,11 +108,25 @@ class TempiBeatDetector: NSObject {
         self.audioInput.startRecording()
     }
     
-    func stop() {
+    func stopMicInput() {
         self.audioInput.stopRecording()
     }
     
-    func setupCommon() {
+    private func setupInput() {
+        self.queuedSamples = [Float]()
+        self.queuedSamplesPtr = 0
+    }
+#endif
+
+    func startFromFile(url url: NSURL) {
+        dispatch_async(dispatch_get_global_queue(0, 0)) { 
+            self.reallyStartFromFile(url: url)
+        }
+    }
+
+    // MARK: - Private stuff
+
+    private func setupCommon() {
         if (self.fft == nil) {
             self.fft = TempiFFT(withSize: self.chunkSize, sampleRate: self.sampleRate)
             self.fft.windowType = TempiFFTWindowType.hanning
@@ -105,6 +135,7 @@ class TempiBeatDetector: NSObject {
         self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
         self.fluxTimeStamps = [Double]()
         self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
+        self.mediaBPMs = [(timeStamp: Double, bpm: Float)]()
         
         self.periodHistory = [[Int]].init(count: self.frequencyBands, repeatedValue: [Int]())
         
@@ -114,13 +145,121 @@ class TempiBeatDetector: NSObject {
         self.startTime = nil
     }
 
-    private func setupInput() {
-        self.queuedSamples = [Float]()
-        self.queuedSamplesPtr = 0
+    private func reallyStartFromFile(url url: NSURL) {
+        let avAsset: AVURLAsset = AVURLAsset(URL: url)
+        
+        self.mediaPath = url.absoluteString
+        self.setupCommon()
+        
+        let assetReader: AVAssetReader
+        do {
+            assetReader = try AVAssetReader(asset: avAsset)
+        } catch let e as NSError {
+            print("*** AVAssetReader failed with \(e)")
+            return
+        }
+        
+        let settings: [String : AnyObject] = [ AVFormatIDKey : Int(kAudioFormatLinearPCM),
+                                               AVSampleRateKey : self.sampleRate,
+                                               AVLinearPCMBitDepthKey : 32,
+                                               AVLinearPCMIsFloatKey : true,
+                                               AVNumberOfChannelsKey : 1 ]
+        
+        let output: AVAssetReaderAudioMixOutput = AVAssetReaderAudioMixOutput.init(audioTracks: avAsset.tracks, audioSettings: settings)
+        
+        assetReader.addOutput(output)
+        
+        if !assetReader.startReading() {
+            print("assetReader.startReading() failed")
+            return
+        }
+        
+        var samplePtr: Int = 0
+        
+        var queuedFileSamples: [Float] = [Float]()
+        
+        repeat {
+            var status: OSStatus = 0
+            guard let nextBuffer = output.copyNextSampleBuffer() else {
+                break
+            }
+            
+            let bufferSampleCnt = CMSampleBufferGetNumSamples(nextBuffer)
+            
+            var bufferList = AudioBufferList(
+                mNumberBuffers: 1,
+                mBuffers: AudioBuffer(
+                    mNumberChannels: 1,
+                    mDataByteSize: 4,
+                    mData: nil))
+            
+            var blockBuffer: CMBlockBuffer?
+            
+            status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(nextBuffer,
+                                                                             nil,
+                                                                             &bufferList,
+                                                                             sizeof(AudioBufferList),
+                                                                             nil,
+                                                                             nil,
+                                                                             kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+                                                                             &blockBuffer)
+            
+            if status != 0 {
+                print("*** CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer failed with error \(status)")
+                break
+            }
+            
+            // Move samples from mData into our native [Float] format.
+            // (There's probably an better way to do this using UnsafeBufferPointer but I couldn't make it work.)
+            for i in 0..<bufferSampleCnt {
+                let ptr = UnsafePointer<Float>(bufferList.mBuffers.mData)
+                let newPtr = ptr + i
+                let sample = unsafeBitCast(newPtr.memory, Float.self)
+                queuedFileSamples.append(sample)
+            }
+            
+            // We have a big buffer of audio (whatever CoreAudio decided to give us).
+            // Now iterate over the buffer, sending a chunkSize's (e.g. 4096 samples) worth of data to the analyzer and then
+            // shifting by hopSize (e.g. 132 samples) after each iteration. If there's not enough data in the buffer (bufferSampleCnt < chunkSize),
+            // then add the data to the queue and get the next buffer.
+            
+            while queuedFileSamples.count >= self.chunkSize {
+                let timeStamp: Double = Double(samplePtr) / Double(self.sampleRate)
+                
+                if self.mediaEndTime > 0.01 {
+                    if timeStamp < self.mediaStartTime || timeStamp > self.mediaEndTime {
+                        queuedFileSamples.removeFirst(self.hopSize)
+                        samplePtr += self.hopSize
+                        continue
+                    }
+                }
+                
+                let subArray: [Float] = Array(queuedFileSamples[0..<self.chunkSize])
+                
+                self.analyzeAudioChunk(timeStamp: timeStamp, samples: subArray)
+                
+                samplePtr += self.hopSize
+                queuedFileSamples.removeFirst(self.hopSize)
+            }
+            
+        } while true
+        
+        if self.fileAnalysisCompletionHandler != nil {
+            var bpms = [Float]()
+            
+            for tuple in self.mediaBPMs {
+                bpms.append(tuple.1)
+            }
+            
+            let mean = tempi_mean(bpms)
+            let median = tempi_median(bpms)
+            let mode = tempi_mode(bpms)
+            
+            self.fileAnalysisCompletionHandler(bpms: self.mediaBPMs, mean: mean, median: median, mode: mode)
+        }
     }
-#endif
     
-    func analyzeAudioChunk(timeStamp timeStamp: Double, samples: [Float]) {
+    private func analyzeAudioChunk(timeStamp timeStamp: Double, samples: [Float]) {
         let (flux, success) = self.calculateFlux(timeStamp: timeStamp, samples: samples)
         if (!success) {
             return
@@ -156,8 +295,6 @@ class TempiBeatDetector: NSObject {
             }
         }
     }
-    
-    // MARK: - Private stuff
     
     private func analyzeTimer(timeStamp timeStamp: Double) {
         self.performMultiBandCorrelationAnalysis(timeStamp: timeStamp)
@@ -268,7 +405,7 @@ class TempiBeatDetector: NSObject {
         // I think this method makes more sense than taking the median, but there's a slight negative impact on accuracy
         // which is probably related to other issues. Come back to it.
 //        var estimatedBPM: Float
-//        if let predominantBPM = tempi_mode(bpms, minFrequency: 2) {
+//        if let predominantBPM = tempi_custom_mode(bpms, minFrequency: 2) {
 //            estimatedBPM = predominantBPM
 //        } else {
 //            estimatedBPM = tempi_median(bpms)
@@ -314,6 +451,8 @@ class TempiBeatDetector: NSObject {
         // The dominant period might be that of a repeating beat (8th or 4th note) or it might be that of a measure. If it's a measure then we'll
         // need some way to determine whether the song is in a 3-tempo or a 4-tempo before determining the beat interval (and currently we don't have that).
         // We can make a decent guess as to beat vs. measure by comparing the interval to the theoretical shortest possible measure.
+        // Why not discard measure-length periods and only rely on periods in the single beat range? Because some rhythms only reveal their period
+        // at the scope of a full measure or even two. E.g. the half or full clavé.
         var beatInterval = interval
         let shortestPossibleMeasure = 60.0 / self.maxTempo * 3.0
         let longestPossibleMeasure = 60.0 / self.minTempo * 3.0
@@ -423,6 +562,10 @@ class TempiBeatDetector: NSObject {
         
         if self.beatDetectionHandler != nil {
             self.beatDetectionHandler(timeStamp: timeStamp, bpm: newBPM)
+        }
+        
+        if self.mediaPath != nil {
+            self.mediaBPMs.append((timeStamp: timeStamp, bpm: newBPM))
         }
         
         if originalBPM != newBPM {

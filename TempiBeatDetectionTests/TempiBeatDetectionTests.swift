@@ -23,13 +23,6 @@ class TempiBeatDetectionTests: XCTestCase {
     
     func testValidation() {
         beatDetector.savePlotData = false
-        beatDetector.validate()
+        beatDetector.validationStart()
     }
-    
-//    func testPerformanceExample() {
-//        self.measureBlock {
-//            self.beatDetector.validatePerformance()
-//        }
-//    }
-    
 }

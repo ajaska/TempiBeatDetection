@@ -73,34 +73,9 @@ extension TempiBeatDetector {
         print(String(format:"[%@] accuracy: %.01f%%\n", self.currentTestName, result))
         self.testSetResults.append(result)
         
-        print("Finished testing: \(self.mediaPath)")
+        print("Finished testing: \(self.mediaPath)\n")
         
         self.testNext()
-
-        self.printBandPeriods()
-    }
-    
-    private func printBandPeriods() {
-        for i in 0..<self.periodHistory.count {
-            let bandPeriods = self.periodHistory[i]
-            print("[\(i)]: ", terminator:"")
-            for j in bandPeriods {
-                print("\(j),", terminator:"")
-            }
-            print("")
-        }
-    }
-    
-    private func printBandPeriodsFlat() {
-        for i in 0..<self.periodHistory.count {
-            if i == 0 || i == 11 {
-                continue
-            }
-            let bandPeriods = self.periodHistory[i]
-            for j in bandPeriods {
-                print("\(j)")
-            }
-        }
     }
     
     private func testAudio(path: String,
@@ -165,11 +140,11 @@ extension TempiBeatDetector {
         self.testSetSetupForSetName("oneOff")
 
         self.tests = [{
-        self.testAudio("Utility/full-clave-65.mp3",
-                       label: "full-clave-65",
-                       actualTempo: 65,
-                       minTempo: 60, maxTempo: 120,
-                       variance: 1)
+            self.testAudio("Home/AG-Sunset Road-116-2.mp3",
+                label: "ag-sunsetroad2",
+                actualTempo: 115,
+                minTempo: 80, maxTempo: 160,
+                variance: 2)
             }]
         
         self.testNext()

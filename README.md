@@ -32,9 +32,9 @@ In <b>static mode</b>, Tempi analyzes the content of an audio file. Call ```star
 A robust validation system is critical to evaluating changes made to the beat detection algorithm. The project utilizes Xcode's unit testing infrastructure to perform validation, so just type Command-U to start it. The project includes sample audio files in the 'Test Media' directory which are typically 15-20s in length and categorized into Home, Studio, Threes, and Utility. Here are the current validation results:
 
 - Studio set: 96.4%
-- Home set: 94%
-- Utility set: 85.5%
-- Threes set: --
+- Home set: 93.9%
+- Utility set: 86.3%
+- Threes set: 70.2%
 
 While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Plots' directory. The fluxValues file contains a stream of spectral flux values while the fluxValuesWithTimeStamps file contains (you guessed it) time stamps _and_ flux values.
 
@@ -45,8 +45,8 @@ I use the free Mac app [Abscissa](http://rbruehl.macbay.de) to visualize the plo
 
 <b>To-do</b>
 
-- Identify 3/4, 6/8, 12/8, etc. Right now the algorithm just always assumes 4/4 so anything in 3/4 is horribly off.
-- Add support for analyzing arbitrary streams of audio samples
+- Improve on 3/4 and 12/8
+- Demonstrate how to sync an action (flash the lights!) with a beat
 - More tests
 - Evaluate (and improve, if necessary) impact on battery life
 

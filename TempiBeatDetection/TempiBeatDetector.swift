@@ -9,8 +9,12 @@ import Foundation
 import Accelerate
 import AVFoundation
 
+enum TempiBeatDetectionStatus {
+    case silence, music
+}
 typealias TempiBeatDetectionCallback = (
     timeStamp: Double,
+    status: TempiBeatDetectionStatus,
     bpm: Float
     ) -> Void
 
@@ -43,6 +47,7 @@ class TempiBeatDetector: NSObject {
 
     var beatDetectionHandler: TempiBeatDetectionCallback!
     var fileAnalysisCompletionHandler: TempiFileAnalysisCompletionCallback!
+    var lastStatus: TempiBeatDetectionStatus!
     
     private var audioInput: TempiAudioInput!
     private var lastMagnitudes: [Float]!
@@ -61,6 +66,14 @@ class TempiBeatDetector: NSObject {
     // Confidence ratings
     private var confidence: Int = 0
     private var lastMeasuredTempo: Float!
+    
+    // Silence vs. music evaluation
+    private var avgMagnitudeHistory: [Float]!
+    private var magHistoryLength: Int {
+        get {
+            return Int(self.sampleRate / Float(self.hopSize) * 2.0)
+        }
+    }
 
     // Timing
     private var analysisInterval: Double = 1.0
@@ -158,6 +171,7 @@ class TempiBeatDetector: NSObject {
         self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
         self.fluxTimeStamps = [Double]()
         self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
+        self.avgMagnitudeHistory = [Float]()
         self.mediaBPMs = [(timeStamp: Double, bpm: Float)]()
         
         self.lastMeasuredTempo = nil
@@ -380,13 +394,34 @@ class TempiBeatDetector: NSObject {
             diffs.append(flux)
         }
         
+        // Update the avgMagnitudeHistory array for the purposes of music vs. silence eval.
+        let avgMag = tempi_mean(self.lastMagnitudes)
+        self.avgMagnitudeHistory.append(avgMag)
+        let toRemoveCnt = self.avgMagnitudeHistory.count - self.magHistoryLength
+        if toRemoveCnt > 0 {
+            self.avgMagnitudeHistory.removeFirst(toRemoveCnt)
+        }
+        
         return (tempi_median(diffs), true)
     }
     
     // MARK: - Autocorrelation analysis
     
-    private func performMultiBandCorrelationAnalysis(timeStamp timeStamp: Double) -> Float {
+    private func performMultiBandCorrelationAnalysis(timeStamp timeStamp: Double) {
         
+        // "Silence" is defined as > 2s with no magnitudes above 0.0.
+        if self.isSilence() {
+            if self.lastStatus == nil || self.lastStatus != .silence {
+                if self.beatDetectionHandler != nil {
+                    self.beatDetectionHandler(timeStamp: timeStamp, status: .silence, bpm: 0)
+                }
+            }
+            self.lastStatus = .silence
+            return
+        }
+        
+        self.lastStatus = .music
+
         var bpms: [Float] = [Float]()
         var maxCorrValue: Float = 0.0
         
@@ -419,7 +454,7 @@ class TempiBeatDetector: NSObject {
         
         if maxCorrValue < self.correlationValueThreshold {
             print(String(format: "%.02f: ** low correlation %.02f", timeStamp, maxCorrValue))
-            return maxCorrValue
+            return
         }
 
         if estimatedTimeSigFactors.count > 2 {
@@ -443,7 +478,7 @@ class TempiBeatDetector: NSObject {
         // is already built into the correaltion value and we returned early if it weren't high enough.
         self.handleEstimatedBPM(timeStamp: timeStamp, bpm: estimatedBPM, useConfidence: false)
         
-        return maxCorrValue
+        return
     }
     
     private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?, timeSignatureFactor: Float?) {
@@ -565,7 +600,7 @@ class TempiBeatDetector: NSObject {
         }
         
         if self.beatDetectionHandler != nil {
-            self.beatDetectionHandler(timeStamp: timeStamp, bpm: newBPM)
+            self.beatDetectionHandler(timeStamp: timeStamp, status: .music, bpm: newBPM)
         }
         
         if self.mediaPath != nil {
@@ -589,6 +624,14 @@ class TempiBeatDetector: NSObject {
         }
         
         self.lastMeasuredTempo = newBPM
+    }
+    
+    private func isSilence() -> Bool {
+        if self.avgMagnitudeHistory.count < self.magHistoryLength {
+            return false
+        } else {
+            return tempi_max(self.avgMagnitudeHistory) < 0.0
+        }
     }
     
     private func mapInterval(interval: Double) -> Double {

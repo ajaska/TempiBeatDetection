@@ -22,7 +22,7 @@ class BPMViewController: UIViewController {
 
         UIApplication.sharedApplication().idleTimerDisabled = true
         
-        beatDetector.beatDetectionHandler = {(timeStamp: Double, bpm: Float) in self.beatDetected(timeStamp, bpm: bpm)}
+        beatDetector.beatDetectionHandler = {(timeStamp: Double, status: TempiBeatDetectionStatus, bpm: Float) in self.beatDetected(timeStamp, status:status, bpm: bpm)}
         beatDetector.minTempo = 80
         beatDetector.maxTempo = 160
         
@@ -88,9 +88,13 @@ class BPMViewController: UIViewController {
         self.beatDetector.startFromMic()
     }
     
-    private func beatDetected(timeStamp: Double, bpm: Float) {
-        dispatch_async(dispatch_get_main_queue()) { 
-            self.bpmLabel.text = String(format: "%0.0f", bpm)
+    private func beatDetected(timeStamp: Double, status: TempiBeatDetectionStatus, bpm: Float) {
+        dispatch_async(dispatch_get_main_queue()) {
+            if status == .silence {
+                self.bpmLabel.text = "— —"
+            } else {
+                self.bpmLabel.text = String(format: "%0.0f", bpm)
+            }
         }
     }
     

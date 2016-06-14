@@ -21,7 +21,7 @@ extension TempiBeatDetector {
             , { self.validateHomeSet1() }
             , {self.validateUtilitySet1() }
             , {self.validateThreesSet1() }
-//            , {self.oneOffTest() }
+//            self.oneOffTest() }
             ]
         
         self.testSetNext()
@@ -140,11 +140,11 @@ extension TempiBeatDetector {
         self.testSetSetupForSetName("oneOff")
 
         self.tests = [{
-            self.testAudio("Home/AG-Sunset Road-116-2.mp3",
-                label: "ag-sunsetroad2",
+            self.testAudio("Utility/half-clave-115.mp3",
+                label: "half-clave-115",
                 actualTempo: 115,
-                minTempo: 80, maxTempo: 160,
-                variance: 2)
+                minTempo: 60, maxTempo: 120,
+                variance: 1)
             }]
         
         self.testNext()

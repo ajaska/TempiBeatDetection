@@ -420,9 +420,9 @@ class TempiBeatDetector: NSObject {
             }
             self.lastStatus = .silence
             return
+        } else {
+            self.lastStatus = .music
         }
-        
-        self.lastStatus = .music
 
         var bpms: [Float] = [Float]()
         var maxCorrValue: Float = 0.0
@@ -531,11 +531,11 @@ class TempiBeatDetector: NSObject {
         
         let bpm = 60.0 / Float(mappedInterval)
         
-        let timSigFactor = self.estimatedTimeSigFactor(maxes)
+        let timeSigFactor = self.estimatedTimeSigFactor(maxes)
         
         //print("timeStamp: \(timeStamp); band: \(band); bpm: \(bpm)")
         
-        return (corrValue, bpm, timSigFactor)
+        return (corrValue, bpm, timeSigFactor)
     }
     
     // MARK: -
@@ -544,7 +544,7 @@ class TempiBeatDetector: NSObject {
         // The basic idea here is: get the dominant measure period (i.e. the longish one), get the dominant beat period (i.e. the shortish one), and divide.
         // If the ratio looks like 3.0 or 6.0 or 12.0, use 3/4; if the ratio looks like 2.0, 4.0, or 8.0, use 4/4.
         
-        var estTimSigFactor: Float!
+        var estTimeSigFactor: Float!
         
         let possibleBeatPeriods = corrTuples.filter({
             return Float($0.0) <= self.maxBeatPeriod
@@ -564,16 +564,16 @@ class TempiBeatDetector: NSObject {
                 if self.tempo(ratio, isNearTempo: 3.0, epsilon: 0.1) ||
                     self.tempo(ratio, isNearTempo: 6.0, epsilon: 0.2) ||
                     self.tempo(ratio, isNearTempo: 12.0, epsilon: 0.5) {
-                    estTimSigFactor = 3.0
+                    estTimeSigFactor = 3.0
                 } else if self.tempo(ratio, isNearTempo: 2.0, epsilon: 0.1) ||
                     self.tempo(ratio, isNearTempo: 4.0, epsilon: 0.2) ||
                     self.tempo(ratio, isNearTempo: 8.0, epsilon: 0.5) {
-                    estTimSigFactor = 4.0
+                    estTimeSigFactor = 4.0
                 }
             }
         }
         
-        return estTimSigFactor
+        return estTimeSigFactor
     }
 
     private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool = true) {

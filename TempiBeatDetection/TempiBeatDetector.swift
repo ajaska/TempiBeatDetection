@@ -410,8 +410,10 @@ class TempiBeatDetector: NSObject {
     private func performMultiBandCorrelationAnalysis(timeStamp timeStamp: Double) {
         
         // "Silence" is defined as > 2s with no magnitudes above 0.0.
-        if self.isSilence() {
+        let (isSilence, avgMag) = self.isSilence()
+        if isSilence {
             if self.lastStatus == nil || self.lastStatus != .silence {
+                print("silence mag: \(avgMag)")
                 if self.beatDetectionHandler != nil {
                     self.beatDetectionHandler(timeStamp: timeStamp, status: .silence, bpm: 0)
                 }
@@ -435,7 +437,7 @@ class TempiBeatDetector: NSObject {
         
         for i in 0..<self.frequencyBands {
             dispatch_group_async(group, dispatch_get_global_queue(0, 0), {
-                let (corr, bpm, timeSigFactor) = self.performSingleCorrelationAnalysis(timeStamp: timeStamp, fluxValues: self.fluxHistory[i])
+                let (corr, bpm, timeSigFactor) = self.performSingleCorrelationAnalysis(timeStamp: timeStamp, band: i)
                 if let corr = corr, bpm = bpm {
                     tempi_synchronized(self) {
                         if corr > maxCorrValue {
@@ -481,9 +483,13 @@ class TempiBeatDetector: NSObject {
         return
     }
     
-    private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, fluxValues: [Float]) -> (correlationValue: Float?, bpm: Float?, timeSignatureFactor: Float?) {
-        var corr = tempi_autocorr(fluxValues, normalize: true)
-        corr = Array(corr[0..<fluxValues.count])
+    private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, band: Int) -> (correlationValue: Float?, bpm: Float?, timeSignatureFactor: Float?) {
+        
+        let fluxValues = self.fluxHistory[band]
+        
+        let corr = tempi_autocorr(fluxValues, normalize: true)
+        
+        assert(corr.count == fluxValues.count, "*** invalid correlation array size")
         
         // Get the top 40 correlations
         var maxes = tempi_max_n(corr, n: 40)
@@ -494,13 +500,14 @@ class TempiBeatDetector: NSObject {
             return $0.0 >= 50
         })
         
-        if maxes.count == 0 {
+        if maxes.isEmpty {
             return (nil, nil, nil)
         }
         
         let corrValue: Float = maxes.first!.1
         
         if corrValue < self.correlationValueThreshold {
+            //print("** corr value \(corrValue) was below threshold; band: \(band)")
             return (nil, nil, nil)
         }
         
@@ -525,6 +532,8 @@ class TempiBeatDetector: NSObject {
         let bpm = 60.0 / Float(mappedInterval)
         
         let timSigFactor = self.estimatedTimeSigFactor(maxes)
+        
+        //print("timeStamp: \(timeStamp); band: \(band); bpm: \(bpm)")
         
         return (corrValue, bpm, timSigFactor)
     }
@@ -626,11 +635,12 @@ class TempiBeatDetector: NSObject {
         self.lastMeasuredTempo = newBPM
     }
     
-    private func isSilence() -> Bool {
+    private func isSilence() -> (Bool, Float) {
         if self.avgMagnitudeHistory.count < self.magHistoryLength {
-            return false
+            return (false, 0.0)
         } else {
-            return tempi_max(self.avgMagnitudeHistory) < 0.0
+            let max = tempi_max(self.avgMagnitudeHistory)
+            return (max < -0.4, max)
         }
     }
     

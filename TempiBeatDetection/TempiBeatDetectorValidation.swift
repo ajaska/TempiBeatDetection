@@ -16,12 +16,12 @@ extension TempiBeatDetector {
         // File-based beat detection runs asynchronously so in order for the unit test to not end prematurely we need to use a semaphore.
         self.validationSemaphore = dispatch_semaphore_create(0)
         
-        self.testSets = [{
-            self.validateStudioSet1() }
+        self.testSets = [
+            { self.validateStudioSet1() }
             , { self.validateHomeSet1() }
             , {self.validateUtilitySet1() }
-            , {self.validateThreesSet1() }
-//            self.oneOffTest() }
+            , { self.validateThreesSet1() }
+//            { self.oneOffTest() }
             ]
         
         self.testSetNext()
@@ -140,11 +140,12 @@ extension TempiBeatDetector {
         self.testSetSetupForSetName("oneOff")
 
         self.tests = [{
-            self.testAudio("Utility/half-clave-115.mp3",
-                label: "half-clave-115",
-                actualTempo: 115,
+            self.testAudio("Threes/Brahms Lullaby.mp3",
+                label: "brahms-lullaby",
+                actualTempo: 68,
+                startTime: 0, endTime: 15,
                 minTempo: 60, maxTempo: 120,
-                variance: 1)
+                variance: 2)
             }]
         
         self.testNext()
@@ -310,7 +311,7 @@ extension TempiBeatDetector {
                     label: "texas-flood",
                     actualTempo: 58, // Or should it be 175? There's disagreement about what a 'beat' is with 6/8 or 12/8 music.
                     startTime: 0, endTime: 20,
-                    minTempo: 40, maxTempo: 120,
+                    minTempo: 40, maxTempo: 80,
                     variance: 2)
             }, {
                 self.testAudio("Threes/Brahms Lullaby.mp3",

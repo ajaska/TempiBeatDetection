@@ -91,7 +91,7 @@ class BPMViewController: UIViewController {
     private func beatDetected(timeStamp: Double, status: TempiBeatDetectionStatus, bpm: Float) {
         dispatch_async(dispatch_get_main_queue()) {
             if status == .silence {
-                self.bpmLabel.text = "— —"
+                self.bpmLabel.text = "——"
             } else {
                 self.bpmLabel.text = String(format: "%0.0f", bpm)
             }

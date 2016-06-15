@@ -314,6 +314,11 @@ extension TempiBeatDetector {
                     minTempo: 40, maxTempo: 80,
                     variance: 2)
             }, {
+                // Brahms Lullaby currently scores horribly (8%). Two simple tweaks bring it to 83%:
+                // 1. Lowering the correlation threshold to .09. The accurate periods have corr values just above .09.
+                // 2. Using tempi_custom_mode instead of tempi_mode.
+                // Unfortunately those tweaks also substantially lower the accuracy of the studio and home sets so
+                // it's hard to justify for only this one song.
                 self.testAudio("Threes/Brahms Lullaby.mp3",
                     label: "brahms-lullaby",
                     actualTempo: 68,

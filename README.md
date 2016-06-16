@@ -34,7 +34,7 @@ A robust validation system is critical to evaluating changes made to the beat de
 - Studio set: 96.4%
 - Home set: 93.9%
 - Utility set: 86.3%
-- Threes set: 70.2%
+- Threes set: 77%
 
 While validating, the beat detector can write out plot data which can be really useful when trying to troubleshoot problems or just to understand how it works. When the ```savePlotData``` property is set, data files for each test are saved to the 'Plots' directory. The fluxValues file contains a stream of spectral flux values while the fluxValuesWithTimeStamps file contains (you guessed it) time stamps _and_ flux values.
 

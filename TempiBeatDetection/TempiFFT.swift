@@ -83,8 +83,8 @@ import Accelerate
     private var log2Size:Int
     private var window:[Float]!
     private var fftSetup:FFTSetup
-    private var complexBuffer:COMPLEX_SPLIT = DSPSplitComplex(realp: nil, imagp: nil)
     private var hasPerformedFFT: Bool = false
+    private var complexBuffer: DSPSplitComplex!
     
     /// Instantiate the FFT.
     /// - Parameter withSize: The length of the sample buffer we'll be analyzing. Must be a power of 2. The resulting ```magnitudes``` are of length ```inSize/2```.
@@ -103,25 +103,22 @@ import Accelerate
         
         // create fft setup
         self.log2Size = Int(log2f(sizeFloat))
-        self.fftSetup = vDSP_create_fftsetup(UInt(log2Size), FFTRadix(FFT_RADIX2))
+        self.fftSetup = vDSP_create_fftsetup(UInt(log2Size), FFTRadix(FFT_RADIX2))!
         
         // Init the complexBuffer
-        let mallocSize: Int = Int(halfSize) * sizeof(Float)
-        self.complexBuffer.realp = UnsafeMutablePointer<Float>(malloc(mallocSize))
-        self.complexBuffer.imagp = UnsafeMutablePointer<Float>(malloc(mallocSize))
+        var real = [Float](repeating: 0.0, count: self.halfSize)
+        var imaginary = [Float](repeating: 0.0, count: self.halfSize)
+        self.complexBuffer = DSPSplitComplex(realp: &real, imagp: &imaginary)
     }
     
     deinit {
         // destroy the fft setup object
         vDSP_destroy_fftsetup(fftSetup)
-        
-        free(complexBuffer.realp)
-        free(complexBuffer.imagp)
     }
     
     /// Perform a forward FFT on the provided single-channel audio data. When complete, the instance can be queried for information about the analysis or the magnitudes can be accessed directly.
     /// - Parameter inMonoBuffer: Audio data in mono format
-    func fftForward(inMonoBuffer:[Float]) {
+    func fftForward(_ inMonoBuffer:[Float]) {
         
         var analysisBuffer = inMonoBuffer
         
@@ -129,7 +126,7 @@ import Accelerate
         if self.windowType != .none {
             
             if self.window == nil {
-                self.window = [Float](count: size, repeatedValue: 0.0)
+                self.window = [Float](repeating: 0.0, count: size)
                 
                 switch self.windowType {
                 case .hamming:
@@ -145,29 +142,32 @@ import Accelerate
             vDSP_vmul(inMonoBuffer, 1, self.window, 1, &analysisBuffer, 1, UInt(inMonoBuffer.count))
         }
         
-        
+
         // vDSP_ctoz converts an interleaved vector into a complex split vector. i.e. moves the even indexed samples into frame.buffer.realp and the odd indexed samples into frame.buffer.imagp.
-        vDSP_ctoz(UnsafePointer<DSPComplex>(analysisBuffer), 2, &complexBuffer, 1, UInt(self.halfSize))
+        withUnsafePointer(to: &analysisBuffer, { $0.withMemoryRebound(to: DSPComplex.self, capacity: analysisBuffer.count) {
+            vDSP_ctoz($0, 2, &(self.complexBuffer!), 1, UInt(self.halfSize))
+            }
+        })
         
         // Perform a forward FFT
-        vDSP_fft_zrip(self.fftSetup, &complexBuffer, 1, UInt(self.log2Size), Int32(FFT_FORWARD))
+        vDSP_fft_zrip(self.fftSetup, &(self.complexBuffer!), 1, UInt(self.log2Size), Int32(FFT_FORWARD))
         
         // Store and square (for better visualization & conversion to db) the magnitudes
-        self.magnitudes = [Float](count: self.halfSize, repeatedValue: 0.0)
-        vDSP_zvmags(&complexBuffer, 1, &self.magnitudes!, 1, UInt(self.halfSize))
+        self.magnitudes = [Float](repeating: 0.0, count: self.halfSize)
+        vDSP_zvmags(&(self.complexBuffer!), 1, &self.magnitudes!, 1, UInt(self.halfSize))
         
         self.hasPerformedFFT = true
     }
     
     /// Applies logical banding on top of the spectrum data. The bands are spaced linearly throughout the spectrum.
-    func calculateLinearBands(minFrequency minFrequency: Float, maxFrequency: Float, numberOfBands: Int) {
+    func calculateLinearBands(minFrequency: Float, maxFrequency: Float, numberOfBands: Int) {
         assert(hasPerformedFFT, "*** Perform the FFT first.")
         
         let actualMaxFrequency = min(self.nyquistFrequency, maxFrequency)
         
         self.numberOfBands = numberOfBands
-        self.bandMagnitudes = [Float](count: numberOfBands, repeatedValue: 0.0)
-        self.bandFrequencies = [Float](count: numberOfBands, repeatedValue: 0.0)
+        self.bandMagnitudes = [Float](repeating: 0.0, count: numberOfBands)
+        self.bandFrequencies = [Float](repeating: 0.0, count: numberOfBands)
         
         let magLowerRange = magIndexForFreq(minFrequency)
         let magUpperRange = magIndexForFreq(actualMaxFrequency)
@@ -192,7 +192,7 @@ import Accelerate
     }
     
     /// Applies logical banding on top of the spectrum data. The bands are grouped by octave throughout the spectrum. Note that the actual min and max frequencies in the resulting band may be lower/higher than the minFrequency/maxFrequency because the band spectrum <i>includes</i> those frequencies but isn't necessarily bounded by them.
-    func calculateLogarithmicBands(minFrequency minFrequency: Float, maxFrequency: Float, bandsPerOctave: Int) {
+    func calculateLogarithmicBands(minFrequency: Float, maxFrequency: Float, bandsPerOctave: Int) {
         assert(hasPerformedFFT, "*** Perform the FFT first.")
         
         // The max can't be any higher than the nyquist
@@ -210,7 +210,7 @@ import Accelerate
             octaveBoundaryFreqs.append(curFreq)
         } while curFreq > actualMinFrequency
         
-        octaveBoundaryFreqs = octaveBoundaryFreqs.reverse()
+        octaveBoundaryFreqs = octaveBoundaryFreqs.reversed()
         
         self.bandMagnitudes = [Float]()
         self.bandFrequencies = [Float]()
@@ -248,12 +248,12 @@ import Accelerate
         self.bandMaxFreq = self.bandFrequencies.last
     }
     
-    private func magIndexForFreq(freq: Float) -> Int {
+    private func magIndexForFreq(_ freq: Float) -> Int {
         return Int(Float(self.magnitudes.count) * freq / self.nyquistFrequency)
     }
     
     // On arrays of 1024 elements, this is ~35x faster than an iterational algorithm. Thanks Accelerate.framework!
-    @inline(__always) private func fastAverage(array:[Float], _ startIdx: Int, _ stopIdx: Int) -> Float {
+    @inline(__always) private func fastAverage(_ array:[Float], _ startIdx: Int, _ stopIdx: Int) -> Float {
         var mean: Float = 0
         let ptr = UnsafePointer<Float>(array)
         vDSP_meanv(ptr + startIdx, 1, &mean, UInt(stopIdx - startIdx))
@@ -261,7 +261,7 @@ import Accelerate
         return mean
     }
     
-    @inline(__always) private func magsInFreqRange(lowFreq: Float, _ highFreq: Float) -> [Float] {
+    @inline(__always) private func magsInFreqRange(_ lowFreq: Float, _ highFreq: Float) -> [Float] {
         let lowIndex = Int(lowFreq / self.bandwidth)
         var highIndex = Int(highFreq / self.bandwidth)
         
@@ -273,13 +273,13 @@ import Accelerate
         return Array(self.magnitudes[lowIndex..<highIndex])
     }
     
-    @inline(__always) private func averageFrequencyInRange(startIndex: Int, _ endIndex: Int) -> Float {
+    @inline(__always) private func averageFrequencyInRange(_ startIndex: Int, _ endIndex: Int) -> Float {
         return (self.bandwidth * Float(startIndex) + self.bandwidth * Float(endIndex)) / 2
     }
     
     /// Get the magnitude for the specified frequency band.
     /// - Parameter inBand: The frequency band you want a magnitude for.
-    func magnitudeAtBand(inBand: Int) -> Float {
+    func magnitudeAtBand(_ inBand: Int) -> Float {
         assert(hasPerformedFFT, "*** Perform the FFT first.")
         assert(bandMagnitudes != nil, "*** Call calculateLinearBands() or calculateLogarithmicBands() first")
         
@@ -289,7 +289,7 @@ import Accelerate
     /// Get the magnitude of the requested frequency in the spectrum.
     /// - Parameter inFrequency: The requested frequency. Must be less than the Nyquist frequency (```sampleRate/2```).
     /// - Returns: A magnitude.
-    func magnitudeAtFrequency(inFrequency: Float) -> Float {
+    func magnitudeAtFrequency(_ inFrequency: Float) -> Float {
         assert(hasPerformedFFT, "*** Perform the FFT first.")
         let index = Int(floorf(inFrequency / self.bandwidth ))
         return self.magnitudes[index]
@@ -298,14 +298,14 @@ import Accelerate
     /// Get the middle frequency of the Nth band.
     /// - Parameter inBand: An index where 0 <= inBand < size / 2.
     /// - Returns: The middle frequency of the provided band.
-    func frequencyAtBand(inBand: Int) -> Float {
+    func frequencyAtBand(_ inBand: Int) -> Float {
         assert(hasPerformedFFT, "*** Perform the FFT first.")
         assert(bandMagnitudes != nil, "*** Call calculateLinearBands() or calculateLogarithmicBands() first")
         return self.bandFrequencies[inBand]
     }
     
     /// Calculate the average magnitude of the frequency band bounded by lowFreq and highFreq, inclusive
-    func averageMagnitude(lowFreq lowFreq: Float, highFreq: Float) -> Float {
+    func averageMagnitude(lowFreq: Float, highFreq: Float) -> Float {
         
         var curFreq = lowFreq
         var total: Float = 0
@@ -320,7 +320,7 @@ import Accelerate
     }
     
     /// Sum magnitudes across bands bounded by lowFreq and highFreq, inclusive
-    func sumMagnitudes(lowFreq lowFreq: Float, highFreq: Float, useDB: Bool) -> Float {
+    func sumMagnitudes(lowFreq: Float, highFreq: Float, useDB: Bool) -> Float {
         
         var curFreq = lowFreq
         var total: Float = 0
@@ -337,7 +337,7 @@ import Accelerate
     }
     
     /// A convenience function that converts a linear magnitude (like those stored in ```magnitudes```) to db (which is log 10).
-    class func toDB(inMagnitude: Float) -> Float {
+    class func toDB(_ inMagnitude: Float) -> Float {
         // ceil to 128db in order to avoid log10'ing 0
         let magnitude = max(inMagnitude, 0.000000000001)
         return 10 * log10f(magnitude)

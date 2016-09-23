@@ -8,29 +8,25 @@
 import Foundation
 import Accelerate
 
-func tempi_dispatch_delay(delay:Double, closure:()->()) {
-    dispatch_after(
-        dispatch_time(
-            DISPATCH_TIME_NOW,
-            Int64(delay * Double(NSEC_PER_SEC))
-        ),
-        dispatch_get_main_queue(), closure)
+func tempi_dispatch_delay(_ delay:Double, closure:@escaping ()->()) {
+    DispatchQueue.main.asyncAfter(
+        deadline: DispatchTime.now() + Double(Int64(delay * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC), execute: closure)
 }
 
-func tempi_synchronized(lock: AnyObject, closure: () -> ()) {
+func tempi_synchronized(_ lock: AnyObject, closure: () -> ()) {
     objc_sync_enter(lock)
     closure()
     objc_sync_exit(lock)
 }
 
-func tempi_is_power_of_2 (n: Int) -> Bool {
+func tempi_is_power_of_2 (_ n: Int) -> Bool {
     let lg2 = logbf(Float(n))
     return remainderf(Float(n), powf(2.0, lg2)) == 0
 }
 
-func tempi_median(a: [Float]) -> Float {
+func tempi_median(_ a: [Float]) -> Float {
     // I tried to make this an Array extension and failed. See below.
-    let sortedArray : [Float] = a.sort( { $0 < $1 } )
+    let sortedArray : [Float] = a.sorted( by: { $0 < $1 } )
     
     if sortedArray.count == 1 {
         return sortedArray[0]
@@ -40,14 +36,14 @@ func tempi_median(a: [Float]) -> Float {
     return sortedArray[sortedArray.count / 2]
 }
 
-func tempi_mean(a: [Float]) -> Float {
+func tempi_mean(_ a: [Float]) -> Float {
     // Again, would be better as an Array extension.    
     var mean: Float = 0
     vDSP_meanv(a, 1, &mean, UInt(a.count))
     return mean
 }
 
-func tempi_mode(a: [Float]) -> Float {
+func tempi_mode(_ a: [Float]) -> Float {
     var buckets = [Int : (Int, Float)]()
     for f in a {
         let i = Int(roundf(f))
@@ -70,7 +66,7 @@ func tempi_mode(a: [Float]) -> Float {
     return modeValue
 }
 
-func tempi_custom_mode(a: [Float], minFrequency: Int) -> Float? {
+func tempi_custom_mode(_ a: [Float], minFrequency: Int) -> Float? {
     // A redefinition of 'mode' suited to our needs. The input values are rounded and nil is returned if a number doesn't occur at least minFrequency times.
     var buckets = [Int : (Int, Float)]()
     for f in a {
@@ -96,7 +92,7 @@ func tempi_custom_mode(a: [Float], minFrequency: Int) -> Float? {
     return modeValue
 }
 
-func tempi_mode_int(a: [Int]) -> Int {
+func tempi_mode_int(_ a: [Int]) -> Int {
     var buckets = [Int : Int]()
     for i in a {
         if buckets[i] == nil {
@@ -121,7 +117,7 @@ func tempi_mode_int(a: [Int]) -> Int {
     return modeValue
 }
 
-func tempi_dump_array(a: [Float]) {
+func tempi_dump_array(_ a: [Float]) {
     for f in a {
         print(String(format:"%.03f", f))
     }

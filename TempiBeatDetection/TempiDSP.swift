@@ -9,7 +9,7 @@
 import Foundation
 import Accelerate
 
-func tempi_autocorr(a: [Float], normalize: Bool) -> [Float] {
+func tempi_autocorr(_ a: [Float], normalize: Bool) -> [Float] {
     // vDSP_conv is horribly underdocumented so I'll spell it out for posterity:
     // vDSP_conv returns a correlation sequence for the provided arrays. The index to the output sequence corresponds to the correlation 'lag' (think 'shift') and the value is the non-normalized correlation.
     // When the arrays are the same, vDSP_conv is performing an autocorrelation and returns an autocorrelation sequence.
@@ -28,11 +28,11 @@ func tempi_autocorr(a: [Float], normalize: Bool) -> [Float] {
     // guarantee that memory beyond the values used in the signal array were accessible, a memory access violation might result.”
     let signalLen: UInt = ((filterLen + 3) & 0xFFFFFFFC) + resultLen
     
-    let padding1 = [Float].init(count: a.count - 1, repeatedValue: 0.0)
-    let padding2 = [Float].init(count: (Int(signalLen) - padding1.count - a.count), repeatedValue: 0.0)
+    let padding1 = [Float].init(repeating: 0.0, count: a.count - 1)
+    let padding2 = [Float].init(repeating: 0.0, count: (Int(signalLen) - padding1.count - a.count))
     let signal = padding1 + a + padding2
     
-    var result = [Float].init(count: Int(resultLen), repeatedValue: 0.0)
+    var result = [Float].init(repeating: 0.0, count: Int(resultLen))
     
     vDSP_conv(signal, 1, a, 1, &result, 1, resultLen, filterLen)
     
@@ -46,25 +46,25 @@ func tempi_autocorr(a: [Float], normalize: Bool) -> [Float] {
     return result
 }
 
-func tempi_normalize(inout a: [Float], _ b: [Float]) {
+func tempi_normalize(_ a: inout [Float], _ b: [Float]) {
     // Normalize the values in a using the sum of the squares of values in b
-    var sqrs: [Float] = [Float].init(count: b.count, repeatedValue: 0)
+    var sqrs: [Float] = [Float].init(repeating: 0, count: b.count)
     var sum: Float = 0
-    var newResult: [Float] = [Float].init(count: a.count, repeatedValue: 0)
+    var newResult: [Float] = [Float].init(repeating: 0, count: a.count)
     vDSP_vsq(b, 1, &sqrs, 1, UInt(b.count))
     vDSP_sve(sqrs, 1, &sum, UInt(sqrs.count))
     vDSP_vsdiv(a, 1, &sum, &newResult, 1, UInt(a.count))
     a = newResult
 }
 
-func tempi_max(a: [Float]) -> Float {
+func tempi_max(_ a: [Float]) -> Float {
     var max: Float = 0.0
     
     vDSP_maxv(a, 1, &max, UInt(a.count))
     return max
 }
 
-func tempi_max_n(a: [Float], n: Int) -> [(Int, Float)] {
+func tempi_max_n(_ a: [Float], n: Int) -> [(Int, Float)] {
     // Return the indices and values of the greatest n values in a
     var x = a
     var result = [(Int, Float)]()
@@ -80,7 +80,7 @@ func tempi_max_n(a: [Float], n: Int) -> [(Int, Float)] {
     return result
 }
 
-func tempi_smooth(a: [Float], w: Int) -> [Float] {
+func tempi_smooth(_ a: [Float], w: Int) -> [Float] {
     var newA: [Float] = [Float]()
     
     for i in 0..<a.count {

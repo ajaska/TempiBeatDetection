@@ -13,16 +13,16 @@ enum TempiBeatDetectionStatus {
     case silence, music
 }
 typealias TempiBeatDetectionCallback = (
-    timeStamp: Double,
-    status: TempiBeatDetectionStatus,
-    bpm: Float
+    _ timeStamp: Double,
+    _ status: TempiBeatDetectionStatus,
+    _ bpm: Float
     ) -> Void
 
 typealias TempiFileAnalysisCompletionCallback = (
-    bpms: [(timeStamp: Double, bpm: Float)],
-    mean: Float,
-    median: Float,
-    mode: Float
+    _ bpms: [(timeStamp: Double, bpm: Float)],
+    _ mean: Float,
+    _ median: Float,
+    _ mode: Float
     ) -> Void
 
 class TempiBeatDetector: NSObject {
@@ -116,7 +116,7 @@ class TempiBeatDetector: NSObject {
     var mediaBPMs: [(timeStamp: Double, bpm: Float)]!
     
     // For validation
-    var validationSemaphore: dispatch_semaphore_t!
+    var validationSemaphore: DispatchSemaphore!
     var tests: [() -> ()]!
     var testSets: [() -> ()]!
     var savePlotData: Bool = false
@@ -154,8 +154,8 @@ class TempiBeatDetector: NSObject {
     }
 #endif
 
-    func startFromFile(url url: NSURL) {
-        dispatch_async(dispatch_get_global_queue(0, 0)) { 
+    func startFromFile(url: URL) {
+        DispatchQueue.global().async {
             self.reallyStartFromFile(url: url)
         }
     }
@@ -168,9 +168,9 @@ class TempiBeatDetector: NSObject {
             self.fft.windowType = TempiFFTWindowType.hanning
         }
         
-        self.lastMagnitudes = [Float](count: self.frequencyBands, repeatedValue: 0)
+        self.lastMagnitudes = [Float](repeating: 0, count: self.frequencyBands)
         self.fluxTimeStamps = [Double]()
-        self.fluxHistory = [[Float]].init(count: self.frequencyBands, repeatedValue: [Float]())
+        self.fluxHistory = [[Float]].init(repeating: [Float](), count: self.frequencyBands)
         self.avgMagnitudeHistory = [Float]()
         self.mediaBPMs = [(timeStamp: Double, bpm: Float)]()
         
@@ -181,8 +181,8 @@ class TempiBeatDetector: NSObject {
         self.currentTimeSignatureFactor = nil
     }
 
-    private func reallyStartFromFile(url url: NSURL) {
-        let avAsset: AVURLAsset = AVURLAsset(URL: url)
+    private func reallyStartFromFile(url: URL) {
+        let avAsset: AVURLAsset = AVURLAsset(url: url)
         
         self.mediaPath = url.absoluteString
         self.setupCommon()
@@ -195,15 +195,15 @@ class TempiBeatDetector: NSObject {
             return
         }
         
-        let settings: [String : AnyObject] = [ AVFormatIDKey : Int(kAudioFormatLinearPCM),
-                                               AVSampleRateKey : self.sampleRate,
-                                               AVLinearPCMBitDepthKey : 32,
-                                               AVLinearPCMIsFloatKey : true,
-                                               AVNumberOfChannelsKey : 1 ]
+        let settings: [String : AnyObject] = [ AVFormatIDKey : Int(kAudioFormatLinearPCM) as AnyObject,
+                                               AVSampleRateKey : self.sampleRate as AnyObject,
+                                               AVLinearPCMBitDepthKey : 32 as AnyObject,
+                                               AVLinearPCMIsFloatKey : true as AnyObject,
+                                               AVNumberOfChannelsKey : 1 as AnyObject ]
         
         let output: AVAssetReaderAudioMixOutput = AVAssetReaderAudioMixOutput.init(audioTracks: avAsset.tracks, audioSettings: settings)
         
-        assetReader.addOutput(output)
+        assetReader.add(output)
         
         if !assetReader.startReading() {
             print("assetReader.startReading() failed")
@@ -234,7 +234,7 @@ class TempiBeatDetector: NSObject {
             status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(nextBuffer,
                                                                              nil,
                                                                              &bufferList,
-                                                                             sizeof(AudioBufferList),
+                                                                             MemoryLayout<AudioBufferList>.size,
                                                                              nil,
                                                                              nil,
                                                                              kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
@@ -246,12 +246,14 @@ class TempiBeatDetector: NSObject {
             }
             
             // Move samples from mData into our native [Float] format.
-            // (There's probably an better way to do this using UnsafeBufferPointer but I couldn't make it work.)
+            let audioBuffer = AudioBuffer(mNumberChannels: bufferList.mBuffers.mNumberChannels,
+                                          mDataByteSize: bufferList.mBuffers.mDataByteSize,
+                                          mData: bufferList.mBuffers.mData)
+            let data = UnsafeRawPointer(audioBuffer.mData)
             for i in 0..<bufferSampleCnt {
-                let ptr = UnsafePointer<Float>(bufferList.mBuffers.mData)
-                let newPtr = ptr + i
-                let sample = unsafeBitCast(newPtr.memory, Float.self)
-                queuedFileSamples.append(sample)
+                if let sample = data?.load(fromByteOffset: i*4, as: Float.self) {
+                    queuedFileSamples.append(sample)
+                }
             }
             
             // We have a big buffer of audio (whatever CoreAudio decided to give us).
@@ -291,11 +293,11 @@ class TempiBeatDetector: NSObject {
             let median = tempi_median(bpms)
             let mode = tempi_mode(bpms)
             
-            self.fileAnalysisCompletionHandler(bpms: self.mediaBPMs, mean: mean, median: median, mode: mode)
+            self.fileAnalysisCompletionHandler(self.mediaBPMs, mean, median, mode)
         }
     }
     
-    private func analyzeAudioChunk(timeStamp timeStamp: Double, samples: [Float]) {
+    private func analyzeAudioChunk(timeStamp: Double, samples: [Float]) {
         let (flux, success) = self.calculateFlux(timeStamp: timeStamp, samples: samples)
         if (!success) {
             return
@@ -332,22 +334,22 @@ class TempiBeatDetector: NSObject {
         }
     }
     
-    private func analyzeTimer(timeStamp timeStamp: Double) {
+    private func analyzeTimer(timeStamp: Double) {
         self.performMultiBandCorrelationAnalysis(timeStamp: timeStamp)
     }
     
-    private func handleMicAudio(timeStamp timeStamp: Double, numberOfFrames:Int, samples:[Float]) {
+    private func handleMicAudio(timeStamp: Double, numberOfFrames:Int, samples:[Float]) {
         
         if (self.queuedSamples.count + numberOfFrames < self.chunkSize) {
             // We're not going to have enough samples for analysis. Queue the samples and save off the timeStamp.
-            self.queuedSamples.appendContentsOf(samples)
+            self.queuedSamples.append(contentsOf: samples)
             if self.savedTimeStamp == nil {
                 self.savedTimeStamp = timeStamp
             }
             return
         }
         
-        self.queuedSamples.appendContentsOf(samples)
+        self.queuedSamples.append(contentsOf: samples)
         
         var baseTimeStamp: Double = self.savedTimeStamp != nil ? self.savedTimeStamp : timeStamp
         
@@ -362,7 +364,7 @@ class TempiBeatDetector: NSObject {
         self.savedTimeStamp = nil
     }
     
-    private func calculateFlux(timeStamp timeStamp: Double, samples: [Float]) -> (flux: Float, success: Bool) {
+    private func calculateFlux(timeStamp: Double, samples: [Float]) -> (flux: Float, success: Bool) {
         self.fft.fftForward(samples)
         
         switch self.frequencyBands {
@@ -407,7 +409,7 @@ class TempiBeatDetector: NSObject {
     
     // MARK: - Autocorrelation analysis
     
-    private func performMultiBandCorrelationAnalysis(timeStamp timeStamp: Double) {
+    private func performMultiBandCorrelationAnalysis(timeStamp: Double) {
         
         // "Silence" is defined as > 2s with no magnitudes above 0.0.
         let (isSilence, avgMag) = self.isSilence()
@@ -415,7 +417,7 @@ class TempiBeatDetector: NSObject {
             if self.lastStatus == nil || self.lastStatus != .silence {
                 print("silence mag: \(avgMag)")
                 if self.beatDetectionHandler != nil {
-                    self.beatDetectionHandler(timeStamp: timeStamp, status: .silence, bpm: 0)
+                    self.beatDetectionHandler(timeStamp, .silence, 0)
                 }
             }
             self.lastStatus = .silence
@@ -433,12 +435,12 @@ class TempiBeatDetector: NSObject {
         // Perform the analysis of each band on a separate thread using GCD.
         // (The speedup from parallelism here isn't earth-shattering - in the 5-10% range - 
         // but still seems like the right thing to do...)
-        let group = dispatch_group_create()
+        let group = DispatchGroup()
         
         for i in 0..<self.frequencyBands {
-            dispatch_group_async(group, dispatch_get_global_queue(0, 0), {
+            DispatchQueue.global().async(group: group, execute: {
                 let (corr, bpm, timeSigFactor) = self.performSingleCorrelationAnalysis(timeStamp: timeStamp, band: i)
-                if let corr = corr, bpm = bpm {
+                if let corr = corr, let bpm = bpm {
                     tempi_synchronized(self) {
                         if corr > maxCorrValue {
                             maxCorrValue = corr
@@ -452,7 +454,7 @@ class TempiBeatDetector: NSObject {
             })
         }
         
-        dispatch_group_wait(group, DISPATCH_TIME_FOREVER)
+        _ = group.wait(timeout: DispatchTime.distantFuture)
         
         if maxCorrValue < self.correlationValueThreshold {
             print(String(format: "%.02f: ** low correlation %.02f", timeStamp, maxCorrValue))
@@ -483,7 +485,7 @@ class TempiBeatDetector: NSObject {
         return
     }
     
-    private func performSingleCorrelationAnalysis(timeStamp timeStamp: Double, band: Int) -> (correlationValue: Float?, bpm: Float?, timeSignatureFactor: Float?) {
+    private func performSingleCorrelationAnalysis(timeStamp: Double, band: Int) -> (correlationValue: Float?, bpm: Float?, timeSignatureFactor: Float?) {
         
         let fluxValues = self.fluxHistory[band]
         
@@ -540,7 +542,7 @@ class TempiBeatDetector: NSObject {
     
     // MARK: -
     
-    private func estimatedTimeSigFactor(corrTuples: [(Int, Float)]) -> Float! {
+    private func estimatedTimeSigFactor(_ corrTuples: [(Int, Float)]) -> Float! {
         // The basic idea here is: get the dominant measure period (i.e. the longish one), get the dominant beat period (i.e. the shortish one), and divide.
         // If the ratio looks like 3.0 or 6.0 or 12.0, use 3/4; if the ratio looks like 2.0, 4.0, or 8.0, use 4/4.
         
@@ -576,7 +578,7 @@ class TempiBeatDetector: NSObject {
         return estTimeSigFactor
     }
 
-    private func handleEstimatedBPM(timeStamp timeStamp: Double, bpm: Float, useConfidence: Bool = true) {
+    private func handleEstimatedBPM(timeStamp: Double, bpm: Float, useConfidence: Bool = true) {
         var originalBPM = bpm
         var newBPM = bpm
         var multiple: Float = 0.0
@@ -609,7 +611,7 @@ class TempiBeatDetector: NSObject {
         }
         
         if self.beatDetectionHandler != nil {
-            self.beatDetectionHandler(timeStamp: timeStamp, status: .music, bpm: newBPM)
+            self.beatDetectionHandler(timeStamp, .music, newBPM)
         }
         
         if self.mediaPath != nil {
@@ -644,7 +646,7 @@ class TempiBeatDetector: NSObject {
         }
     }
     
-    private func mapInterval(interval: Double) -> Double {
+    private func mapInterval(_ interval: Double) -> Double {
         var mappedInterval = interval
         let minInterval: Double = 60.0 / Double(self.maxTempo)
         let maxInterval: Double = 60.0 / Double(self.minTempo)
@@ -658,7 +660,7 @@ class TempiBeatDetector: NSObject {
         return mappedInterval
     }
     
-    private func tempo(tempo1: Float, isMultipleOf tempo2: Float, inout multiple: Float) -> Bool
+    private func tempo(_ tempo1: Float, isMultipleOf tempo2: Float, multiple: inout Float) -> Bool
     {
         let multiples: [Float] = [0.5, 0.75, 1.5, 1.33333, 2.0]
         for m in multiples {
@@ -671,7 +673,7 @@ class TempiBeatDetector: NSObject {
         return false
     }
 
-    private func tempo(tempo1: Float, isNearTempo tempo2: Float, epsilon: Float) -> Bool {
+    private func tempo(_ tempo1: Float, isNearTempo tempo2: Float, epsilon: Float) -> Bool {
         return tempo2 - epsilon < tempo1 && tempo2 + epsilon > tempo1
     }
     

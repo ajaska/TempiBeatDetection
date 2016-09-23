@@ -14,7 +14,7 @@ extension TempiBeatDetector {
     func validationStart() {
         
         // File-based beat detection runs asynchronously so in order for the unit test to not end prematurely we need to use a semaphore.
-        self.validationSemaphore = dispatch_semaphore_create(0)
+        self.validationSemaphore = DispatchSemaphore(value: 0)
         
         self.testSets = [
             { self.validateStudioSet1() }
@@ -26,36 +26,36 @@ extension TempiBeatDetector {
         
         self.testSetNext()
         
-        dispatch_semaphore_wait(self.validationSemaphore, DISPATCH_TIME_FOREVER)
+        _ = self.validationSemaphore.wait(timeout: DispatchTime.distantFuture)
     }
     
-    private func projectURL() -> NSURL {
+    private func projectURL() -> URL {
         let projectPath = "/Users/jscalo/Developer/Tempi/com.github/TempiBeatDetection"
-        return NSURL.fileURLWithPath(projectPath)
+        return URL(fileURLWithPath: projectPath)
     }
 
     private func validationSetup() {
         if self.savePlotData {
-            let projectURL: NSURL = self.projectURL()
+            let projectURL: URL = self.projectURL()
             
-            var plotFluxValuesURL = projectURL.URLByAppendingPathComponent("Plots")
-            plotFluxValuesURL = plotFluxValuesURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValues.txt")
+            var plotFluxValuesURL = projectURL.appendingPathComponent("Plots")
+            plotFluxValuesURL = plotFluxValuesURL.appendingPathComponent("\(self.currentTestName)-fluxValues.txt")
             
-            var plotMedianFluxValuesWithTimeStamplsURL = projectURL.URLByAppendingPathComponent("Plots")
-            plotMedianFluxValuesWithTimeStamplsURL = plotMedianFluxValuesWithTimeStamplsURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxValuesWithTimeStamps.txt")
+            var plotMedianFluxValuesWithTimeStamplsURL = projectURL.appendingPathComponent("Plots")
+            plotMedianFluxValuesWithTimeStamplsURL = plotMedianFluxValuesWithTimeStamplsURL.appendingPathComponent("\(self.currentTestName)-fluxValuesWithTimeStamps.txt")
             
-            var plotFullBandFluxValuesWithTimeStamplsURL = projectURL.URLByAppendingPathComponent("Plots")
-            plotFullBandFluxValuesWithTimeStamplsURL = plotFullBandFluxValuesWithTimeStamplsURL.URLByAppendingPathComponent("\(self.currentTestName)-fluxFullBandValuesWithTimeStamps.txt")
+            var plotFullBandFluxValuesWithTimeStamplsURL = projectURL.appendingPathComponent("Plots")
+            plotFullBandFluxValuesWithTimeStamplsURL = plotFullBandFluxValuesWithTimeStamplsURL.appendingPathComponent("\(self.currentTestName)-fluxFullBandValuesWithTimeStamps.txt")
 
             do {
-                try NSFileManager.defaultManager().removeItemAtURL(plotFluxValuesURL)
-                try NSFileManager.defaultManager().removeItemAtURL(plotMedianFluxValuesWithTimeStamplsURL)
-                try NSFileManager.defaultManager().removeItemAtURL(plotFullBandFluxValuesWithTimeStamplsURL)
+                try FileManager.default.removeItem(at: plotFluxValuesURL)
+                try FileManager.default.removeItem(at: plotMedianFluxValuesWithTimeStamplsURL)
+                try FileManager.default.removeItem(at: plotFullBandFluxValuesWithTimeStamplsURL)
             } catch _ { /* normal if file not yet created */ }
             
-            self.plotFluxValuesDataFile = fopen(plotFluxValuesURL.fileSystemRepresentation, "w")
-            self.plotMedianFluxValuesWithTimeStampsDataFile = fopen(plotMedianFluxValuesWithTimeStamplsURL.fileSystemRepresentation, "w")
-            self.plotFullBandFluxValuesWithTimeStampsDataFile = fopen(plotFullBandFluxValuesWithTimeStamplsURL.fileSystemRepresentation, "w")
+            self.plotFluxValuesDataFile = fopen((plotFluxValuesURL as NSURL).fileSystemRepresentation, "w")
+            self.plotMedianFluxValuesWithTimeStampsDataFile = fopen((plotMedianFluxValuesWithTimeStamplsURL as NSURL).fileSystemRepresentation, "w")
+            self.plotFullBandFluxValuesWithTimeStampsDataFile = fopen((plotFullBandFluxValuesWithTimeStamplsURL as NSURL).fileSystemRepresentation, "w")
         }
         
         self.testTotal = 0
@@ -78,15 +78,15 @@ extension TempiBeatDetector {
         self.testNext()
     }
     
-    private func testAudio(path: String,
+    private func testAudio(_ path: String,
                            label: String,
                            actualTempo: Float,
                            startTime: Double = 0.0, endTime: Double = 0.0,
                            minTempo: Float = 40.0, maxTempo: Float = 240.0,
                            variance: Float = 2.0) {
         
-        let projectURL: NSURL = self.projectURL()
-        let songURL = projectURL.URLByAppendingPathComponent("Test Media/\(path)")
+        let projectURL: URL = self.projectURL()
+        let songURL = projectURL.appendingPathComponent("Test Media/\(path)")
         
         print("Start testing: \(path); actual bpm: \(actualTempo)")
 
@@ -104,7 +104,7 @@ extension TempiBeatDetector {
         self.startFromFile(url: songURL)
     }
     
-    private func testSetSetupForSetName(setName: String) {
+    private func testSetSetupForSetName(_ setName: String) {
         print("Starting validation set \(setName)")
         self.currentTestSetName = setName
         self.testSetResults = [Float]()
@@ -124,7 +124,7 @@ extension TempiBeatDetector {
     // If there's another test set, start it. Otherwise signal the semaphore so validation can end.
     private func testSetNext() {
         if self.testSets.isEmpty {
-            dispatch_semaphore_signal(self.validationSemaphore)
+            self.validationSemaphore.signal()
         } else {
             let testSet = self.testSets.removeFirst()
             testSet()

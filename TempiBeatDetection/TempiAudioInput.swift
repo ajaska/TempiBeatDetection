@@ -97,16 +97,9 @@ class TempiAudioInput: NSObject {
         assert(osErr == noErr, "*** AudioUnitRender err \(osErr)")
         
         // Move samples from mData into our native [Float] format.
-        // (There's probably an better way to do this using UnsafeBufferPointer but I couldn't make it work.)
         var monoSamples = [Float]()
-        for i in 0..<Int(inNumberFrames) {
-            withUnsafePointer(to: &bufferList.mBuffers.mData, {
-                let ptr = $0
-                let newPtr = ptr + i
-                let sample = unsafeBitCast(newPtr.pointee, to: Float.self)
-                monoSamples.append(sample)
-            })
-        }
+        let ptr = bufferList.mBuffers.mData?.assumingMemoryBound(to: Float.self)
+        monoSamples.append(contentsOf: UnsafeBufferPointer(start: ptr, count: Int(inNumberFrames)))
         
         if audioInput.shouldPerformDCOffsetRejection {
             DCRejectionFilterProcessInPlace(&monoSamples, count: Int(inNumberFrames))

@@ -68,6 +68,7 @@ class TempiBeatDetector: NSObject {
     private var lastMeasuredTempo: Float!
     
     // Silence vs. music evaluation
+    private var silenceThreshold: Float = -2.0
     private var avgMagnitudeHistory: [Float]!
     private var magHistoryLength: Int {
         get {
@@ -411,7 +412,7 @@ class TempiBeatDetector: NSObject {
     
     private func performMultiBandCorrelationAnalysis(timeStamp: Double) {
         
-        // "Silence" is defined as > 2s with no magnitudes above 0.0.
+        // "Silence" is defined as > 2s with no magnitudes above the silenceThreshold
         let (isSilence, avgMag) = self.isSilence()
         if isSilence {
             if self.lastStatus == nil || self.lastStatus != .silence {
@@ -642,7 +643,7 @@ class TempiBeatDetector: NSObject {
             return (false, 0.0)
         } else {
             let max = tempi_max(self.avgMagnitudeHistory)
-            return (max < -0.4, max)
+            return (max < self.silenceThreshold, max)
         }
     }
     

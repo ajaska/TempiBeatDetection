@@ -144,10 +144,31 @@ import Accelerate
         
 
         // vDSP_ctoz converts an interleaved vector into a complex split vector. i.e. moves the even indexed samples into frame.buffer.realp and the odd indexed samples into frame.buffer.imagp.
-        withUnsafePointer(to: &analysisBuffer, { $0.withMemoryRebound(to: DSPComplex.self, capacity: analysisBuffer.count) {
-            vDSP_ctoz($0, 2, &(self.complexBuffer!), 1, UInt(self.halfSize))
+//        var imaginary = [Float](repeating: 0.0, count: analysisBuffer.count)
+//        var splitComplex = DSPSplitComplex(realp: &analysisBuffer, imagp: &imaginary)
+//        let length = vDSP_Length(self.log2Size)
+//        vDSP_fft_zip(self.fftSetup, &splitComplex, 1, length, FFTDirection(FFT_FORWARD))
+
+        // Doing the job of vDSP_ctoz 😒. (See below.)
+        var reals = [Float]()
+        var imags = [Float]()
+        for (idx, element) in analysisBuffer.enumerated() {
+            if idx % 2 == 0 {
+                reals.append(element)
+            } else {
+                imags.append(element)
             }
-        })
+        }
+        self.complexBuffer = DSPSplitComplex(realp: UnsafeMutablePointer(mutating: reals), imagp: UnsafeMutablePointer(mutating: imags))
+        
+        // This compiles without error but doesn't actually work. It results in garbage values being stored to the complexBuffer's real and imag parts. Why? The above workaround is undoubtedly tons slower so it would be good to get vDSP_ctoz working again.
+//        withUnsafePointer(to: &analysisBuffer, { $0.withMemoryRebound(to: DSPComplex.self, capacity: analysisBuffer.count) {
+//            vDSP_ctoz($0, 2, &(self.complexBuffer!), 1, UInt(self.halfSize))
+//            }
+//        })
+        // Verifying garbage values.
+//        let rFloats = [Float](UnsafeBufferPointer(start: self.complexBuffer.realp, count: self.halfSize))
+//        let iFloats = [Float](UnsafeBufferPointer(start: self.complexBuffer.imagp, count: self.halfSize))
         
         // Perform a forward FFT
         vDSP_fft_zrip(self.fftSetup, &(self.complexBuffer!), 1, UInt(self.log2Size), Int32(FFT_FORWARD))

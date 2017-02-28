@@ -174,7 +174,7 @@
 				TargetAttributes = {
 					EFE97D631CCFC8840082BAEC = {
 						CreatedOnToolsVersion = 7.3;
-						DevelopmentTeam = V46VL48CWC;
+						DevelopmentTeam = 4X4D3MENPN;
 						LastSwiftMigration = 0800;
 					};
 					EFF64A861CD90C4900EBA555 = {
@@ -378,7 +378,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = V46VL48CWC;
+				DEVELOPMENT_TEAM = 4X4D3MENPN;
 				INFOPLIST_FILE = TempiBeatDetection/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = net.scalo.TempiBeatDetection;
@@ -391,7 +391,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = V46VL48CWC;
+				DEVELOPMENT_TEAM = 4X4D3MENPN;
 				INFOPLIST_FILE = TempiBeatDetection/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = net.scalo.TempiBeatDetection;
